@@ -1,0 +1,4 @@
+node_modules/
+chunks/
+*.mp4
+remotion-tmp/

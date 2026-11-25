@@ -1,0 +1,47 @@
+{
+  "name": "studio",
+  "version": "1.0.0",
+  "description": "My Remotion video",
+  "repository": {},
+  "license": "UNLICENSED",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
+  "private": true,
+  "dependencies": {
+    "@lottiefiles/dotlottie-react": "^0.22.3",
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.2",
+    "@react-three/postprocessing": "^3.2.2",
+    "@react-three/rapier": "^2.2.0",
+    "@remotion/cli": "^4.0.546",
+    "@remotion/core": "^1.0.0-y.46",
+    "@remotion/three": "^4.0.546",
+    "gsap": "^3.15.1",
+    "lottie-web": "^5.13.0",
+    "motion": "^14.14.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "^4.0.546",
+    "three": "^0.187.0",
+    "three.quarks": "^0.18.0",
+    "tweakpane": "^4.0.5"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.546",
+    "@types/react": "19.3.0",
+    "@types/web": "0.0.166",
+    "eslint": "10.15.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "upgrade": "remotion upgrade",
+    "lint": "eslint src && tsc"
+  },
+  "allowScripts": {
+    "esbuild": false
+  }
+}
