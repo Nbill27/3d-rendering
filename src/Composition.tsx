@@ -8,6 +8,7 @@ import { MotionSample } from "./MotionSample";
 import { Video01 } from "./videos/v01/Video01";
 import { Video02 } from "./videos/v02/Video02";
 import { Video03 } from "./videos/v03/Video03";
+import { Video04 } from "./videos/v04/Video04";
 
 export const MyComposition = () => {
   return (
@@ -79,6 +80,14 @@ export const MyComposition = () => {
       <Composition
         id="Video03"
         component={Video03}
+        durationInFrames={1800}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="Video04"
+        component={Video04}
         durationInFrames={1800}
         fps={30}
         width={1080}
