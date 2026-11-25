@@ -62,6 +62,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install ffmpeg (needed for the ffprobe verification step)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Ensure Chrome Headless Shell
         run: npx remotion browser ensure
 
