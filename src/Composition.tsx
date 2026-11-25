@@ -5,9 +5,9 @@ import { VideoKetiga } from "./VideoKetiga";
 import { VideoFinal } from "./VideoFinal";
 import { VideoChibi } from "./VideoChibi";
 import { MotionSample } from "./MotionSample";
-import { BajakJawa } from "./videos/bajakjawa/BajakJawa";
-import { NegaraBobrok } from "./videos/negarabobrok/NegaraBobrok";
-import { AndhikaItera } from "./videos/andhikaitera/AndhikaItera";
+import { Video01 } from "./videos/v01/Video01";
+import { Video02 } from "./videos/v02/Video02";
+import { Video03 } from "./videos/v03/Video03";
 
 export const MyComposition = () => {
   return (
@@ -61,24 +61,24 @@ export const MyComposition = () => {
         height={1920}
       />
       <Composition
-        id="NegaraBobrok"
-        component={NegaraBobrok}
+        id="Video02"
+        component={Video02}
         durationInFrames={1800}
         fps={30}
         width={1080}
         height={1920}
       />
       <Composition
-        id="BajakJawa"
-        component={BajakJawa}
+        id="Video01"
+        component={Video01}
         durationInFrames={1800}
         fps={30}
         width={1080}
         height={1920}
       />
       <Composition
-        id="AndhikaItera"
-        component={AndhikaItera}
+        id="Video03"
+        component={Video03}
         durationInFrames={1800}
         fps={30}
         width={1080}
