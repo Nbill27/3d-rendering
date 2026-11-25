@@ -7,6 +7,7 @@ import { VideoChibi } from "./VideoChibi";
 import { MotionSample } from "./MotionSample";
 import { BajakJawa } from "./videos/bajakjawa/BajakJawa";
 import { NegaraBobrok } from "./videos/negarabobrok/NegaraBobrok";
+import { AndhikaItera } from "./videos/andhikaitera/AndhikaItera";
 
 export const MyComposition = () => {
   return (
@@ -70,6 +71,14 @@ export const MyComposition = () => {
       <Composition
         id="BajakJawa"
         component={BajakJawa}
+        durationInFrames={1800}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="AndhikaItera"
+        component={AndhikaItera}
         durationInFrames={1800}
         fps={30}
         width={1080}
