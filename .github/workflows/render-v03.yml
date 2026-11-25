@@ -1,0 +1,94 @@
+name: Render Video03
+
+# Renders all 1800 frames of the Video03 composition in 10 parallel
+# jobs (180 frames each). Each job uploads its 180-frame mp4 as an artifact;
+# the artifacts are concatenated and muxed with audio/mix.wav locally
+# afterwards. No frames are rendered locally for this video.
+#
+# Trigger manually from the Actions tab (workflow_dispatch).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - job: 0
+            start: 0
+            end: 179
+          - job: 1
+            start: 180
+            end: 359
+          - job: 2
+            start: 360
+            end: 539
+          - job: 3
+            start: 540
+            end: 719
+          - job: 4
+            start: 720
+            end: 899
+          - job: 5
+            start: 900
+            end: 1079
+          - job: 6
+            start: 1080
+            end: 1259
+          - job: 7
+            start: 1260
+            end: 1439
+          - job: 8
+            start: 1440
+            end: 1619
+          - job: 9
+            start: 1620
+            end: 1799
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install ffmpeg (needed for the ffprobe verification step)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Ensure Chrome Headless Shell
+        run: npx remotion browser ensure
+
+      - name: Render frames ${{ matrix.start }}-${{ matrix.end }}
+        run: >
+          npx remotion render Video03
+          chunk-${{ matrix.job }}.mp4
+          --frames=${{ matrix.start }}-${{ matrix.end }}
+          --concurrency=1
+          --timeout=300000
+
+      - name: Verify chunk (must be exactly 180 frames, 1080x1920)
+        run: |
+          FRAMES=$(ffprobe -v error -count_frames -select_streams v:0 \
+            -show_entries stream=nb_read_frames -of csv=p=0 \
+            chunk-${{ matrix.job }}.mp4)
+          echo "frames=$FRAMES"
+          test "$FRAMES" = "180"
+          ffprobe -v error -select_streams v:0 \
+            -show_entries stream=width,height -of csv=p=0 \
+            chunk-${{ matrix.job }}.mp4
+
+      - name: Upload chunk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunk-${{ matrix.job }}
+          path: chunk-${{ matrix.job }}.mp4
+          retention-days: 7
