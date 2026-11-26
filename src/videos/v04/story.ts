@@ -23,20 +23,27 @@ export const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 export const smooth = (x: number) => { const u = clamp01(x); return u * u * (3 - 2 * u); };
 export const easeOut = (u: number) => 1 - (1 - clamp01(u)) ** 4;
 // ---------------- story motion (t = story time in seconds) ----------------
-/** shot 1 (0-5 s): the emu flock marches south into the wheat, z -34 -> -12 */
-export const flockZ = (t: number) => -34 + 22 * clamp01(t / 5);
+/** shot 1 (0-5 s): the emu flock marches south into the wheat, z -34 -> -12.
+ *  Motion Tahap 5: smooth() (smootherstep ease-in-out) — same endpoints and
+ *  timing as the old linear clamp01, only the curve: slow start/stop, no
+ *  robotic constant speed. Playful long-travel analogue (no overshoot here:
+ *  a 22 m overshoot would break the endpoint and the camera focus). */
+export const flockZ = (t: number) => -34 + 22 * smooth(t / 5);
 /** shot 6 (27-33 s): the flock front runs south, z -14 -> +8 */
-export const scatterZ = (t: number) => -14 + 22 * clamp01((t - 27) / 6);
+export const scatterZ = (t: number) => -14 + 22 * smooth((t - 27) / 6);
 /** shot 8 (39-42 s): the truck chases south down the road, z 0 -> +14 */
-export const truckZ = (t: number) => 0 + 14 * clamp01((t - 39) / 3);
+export const truckZ = (t: number) => 0 + 14 * smooth((t - 39) / 3);
 /** shot 9 (42-51 s): the soldiers walk north away from the field, z +12 -> -2 */
-export const retreatZ = (t: number) => 12 - 14 * clamp01((t - 42) / 9);
+export const retreatZ = (t: number) => 12 - 14 * smooth((t - 42) / 9);
 
 export type StoryState = { flock: number; truck: number; retreat: number };
 export const storyState = (id: number, t: number): StoryState => {
   const s = SHOTS[id - 1];
   const tau = s.tau(t);
-  return { flock: clamp01(tau / 5), truck: clamp01((tau - 39) / 3), retreat: clamp01((tau - 42) / 9) };
+  // Motion Tahap 5: smooth() instead of linear clamp01 — same 0..1 endpoints
+  // and timing, only the curve. (stage() currently ignores this state, but the
+  // values now match the eased flockZ/truckZ/retreatZ above.)
+  return { flock: smooth(tau / 5), truck: smooth((tau - 39) / 3), retreat: smooth((tau - 42) / 9) };
 };
 
 // ---------------- shots ----------------
@@ -63,7 +70,7 @@ export const shotAt = (f: number) => SHOTS.find((s) => f >= s.a && f < s.b) ?? S
 export const layersAt = (f: number): { id: number; alpha: number }[] => {
   for (const s of SHOTS) {
     const x = XFADE[s.id];
-    if (x && f >= s.a - x / 2 && f < s.a + x / 2) return [{ id: s.id - 1, alpha: 1 }, { id: s.id, alpha: (f - (s.a - x / 2) + 1) / (x + 1) }];
+    if (x && f >= s.a - x / 2 && f < s.a + x / 2) return [{ id: s.id - 1, alpha: 1 }, { id: s.id, alpha: smooth((f - (s.a - x / 2) + 1) / (x + 1)) }];
   }
   return [{ id: shotAt(f).id, alpha: 1 }];
 };
@@ -224,7 +231,9 @@ export const DOF: Dof[] = [
 export const dofAt = (f: number) => {
   let i = 0; while (i + 1 < DOF.length && f >= DOF[i + 1].f) i++;
   const d = DOF[i], p = DOF[Math.max(0, i - 1)];
-  const k = d.dur ? Math.min(1, (f - d.f) / d.dur) : 1;
+  // Motion Tahap 5: smooth() instead of the linear ramp — same cInf endpoints
+  // and transition duration, only the curve (gentle focus pull, no linear grind).
+  const k = d.dur ? smooth((f - d.f) / d.dur) : 1;
   return { cInf: p.cInf + (d.cInf - p.cInf) * k, focus: d.focus };
 };
 export const focusAt = (id: number, f: number): V3 => {

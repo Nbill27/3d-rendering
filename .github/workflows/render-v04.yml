@@ -1,7 +1,7 @@
 name: Render Video04
 
-# Renders all 1800 frames of the Video04 composition in 10 parallel
-# jobs (180 frames each). Each job uploads its 180-frame mp4 as an artifact;
+# Renders all 1800 frames of the Video04 composition in 15 parallel
+# jobs (120 frames each). Each job uploads its 120-frame mp4 as an artifact;
 # the artifacts are concatenated and muxed with audio/mix.wav locally
 # afterwards. No frames are rendered locally for this video.
 #
@@ -20,33 +20,48 @@ jobs:
         include:
           - job: 0
             start: 0
-            end: 179
+            end: 119
           - job: 1
-            start: 180
-            end: 359
+            start: 120
+            end: 239
           - job: 2
-            start: 360
-            end: 539
+            start: 240
+            end: 359
           - job: 3
-            start: 540
-            end: 719
+            start: 360
+            end: 479
           - job: 4
-            start: 720
-            end: 899
+            start: 480
+            end: 599
           - job: 5
-            start: 900
-            end: 1079
+            start: 600
+            end: 719
           - job: 6
-            start: 1080
-            end: 1259
+            start: 720
+            end: 839
           - job: 7
-            start: 1260
-            end: 1439
+            start: 840
+            end: 959
           - job: 8
-            start: 1440
-            end: 1619
+            start: 960
+            end: 1079
           - job: 9
-            start: 1620
+            start: 1080
+            end: 1199
+          - job: 10
+            start: 1200
+            end: 1319
+          - job: 11
+            start: 1320
+            end: 1439
+          - job: 12
+            start: 1440
+            end: 1559
+          - job: 13
+            start: 1560
+            end: 1679
+          - job: 14
+            start: 1680
             end: 1799
     steps:
       - name: Checkout
@@ -75,13 +90,13 @@ jobs:
           --concurrency=1
           --timeout=300000
 
-      - name: Verify chunk (must be exactly 180 frames, 1080x1920)
+      - name: Verify chunk (must be exactly 120 frames, 1080x1920)
         run: |
           FRAMES=$(ffprobe -v error -count_frames -select_streams v:0 \
             -show_entries stream=nb_read_frames -of csv=p=0 \
             video04-chunk-${{ matrix.job }}.mp4)
           echo "frames=$FRAMES"
-          test "$FRAMES" = "180"
+          test "$FRAMES" = "120"
           ffprobe -v error -select_streams v:0 \
             -show_entries stream=width,height -of csv=p=0 \
             video04-chunk-${{ matrix.job }}.mp4

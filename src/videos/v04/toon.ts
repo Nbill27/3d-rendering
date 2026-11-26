@@ -835,7 +835,11 @@ export const fxNote = (p: Pen, kind: number, col = "#1f2a44") => {
 
 /** spark / impact star on a 500 x 500 canvas; t in 0..1 */
 export const fxBurst = (p: Pen, t: number, col = "#fff3b0", rays = 10, r0 = 40, r1 = 230) => {
-  const c = 250, e = 1 - (1 - t) ** 3;
+  const c = 250;
+  // Motion Tahap 5 (Playful signature): ease-out-back, overshoot ~10% — the star
+  // pops past its size then settles. Same endpoints e(0)=0, e(1)=1 as the old
+  // ease-out cubic; the ray tips use e, the core ellipse keeps the old (1-t) fade.
+  const e = 1 + 2.70158 * (t - 1) ** 3 + 1.70158 * (t - 1) ** 2;
   for (let i = 0; i < rays; i++) {
     const a = rad((i * 360) / rays + 7 * (i % 2)), ra = r0 + (r1 - r0) * e * (0.75 + 0.25 * (i % 2));
     p.poly([[c + r0 * 0.5 * Math.cos(a + 0.18), c + r0 * 0.5 * Math.sin(a + 0.18)], [c + ra * Math.cos(a), c + ra * Math.sin(a)],
@@ -864,8 +868,15 @@ export const fxSplash = (p: Pen, t: number) => {
 
 /** dust puff on a 300 x 300 canvas; t in 0..1 */
 export const fxPuff = (p: Pen, t: number) => {
+  // Motion Tahap 5: the puff expands with an ease-out cubic (dust slows as it
+  // spreads — gas material, no overshoot: dust never contracts back). Same
+  // endpoints as the old linear d = 40 + 70*t (d 40 -> 110, radius x0.4 at t=1);
+  // the radius shrink tracks the same e so size and spread stay in step.
+  // Alpha (1-t) is kept linear: it only accompanies the position+size motion,
+  // never carries the change alone.
+  const e = 1 - (1 - t) ** 3;
   for (let i = 0; i < 5; i++) {
-    const a = rad(160 + i * 55), d = 40 + 70 * t, r = (34 + 20 * (i % 2)) * (1 - 0.6 * t);
+    const a = rad(160 + i * 55), d = 40 + 70 * e, r = (34 + 20 * (i % 2)) * (1 - 0.6 * e);
     p.ell(150 + d * Math.cos(a), 180 + d * 0.45 * Math.sin(a), r, r * 0.8, `rgba(238,225,205,${(1 - t).toFixed(3)})`, 0);
   }
 };
@@ -933,67 +944,196 @@ export const fxBike = (p: Pen, phase: number, flip = false) => {
 /** emu, side view facing right, on a 600 x 400 canvas (feet at y = 390); phase 0..1 runs the legs.
  *  flip mirrors the drawing so the bird runs in the direction of travel.
  *  Big brown flightless bird: pear-shaped shaggy body, long curved neck, small head, long pale legs. */
-export const fxEmu = (p: Pen, phase: number, flip = false) => {
+/** Emu, side view on a 600 x 400 canvas (feet at y ~392). Anatomy from
+ *  projects/emu-war/anatomy/emu.html (Fig 1, 46 parts): three-segment legs
+ *  (short femur hidden in the feathers, long tibiotarsus, long
+ *  tarsometatarsus), the "backward knee" is the intertarsal ankle bending
+ *  opposite to the knee, S-curved 3-segment neck, vestigial wings.
+ *  pose: "run" (neck up, legs cycling), "peck" (neck down to the wheat,
+ *  S3), "drink" (neck down to the water, S7), "stand" (S2/S10). */
+export const fxEmu = (p: Pen, phase: number, flip = false, pose: "run" | "peck" | "drink" | "stand" = "run") => {
   const g = p.g;
   if (flip) { g.save(); g.translate(600, 0); g.scale(-1, 1); }
-  const bob = 9 * Math.abs(Math.sin(phase * Math.PI * 2));
-  g.save(); g.translate(0, -bob);
+  const running = pose === "run";
+  const bob = running ? 9 * Math.abs(Math.sin(phase * Math.PI * 2)) : 0;
+  const pitch = running ? -0.06 : 0;
+  g.save(); g.translate(0, -bob); g.translate(285, 240); g.rotate(pitch); g.translate(-285, -240);
   const BODY = "#6a4a2f", DARK = "#4a3220", NECK = "#7a5638", LEG = "#c9a06a";
-  // shaggy tail feathers fanning from the rear
+  // shaggy tail feathers fanning from the rear (sit on the pelvis)
   for (const [dx, dy] of [[-46, -14], [-52, 2], [-44, 16]] as const)
     p.stroke([[168, 200], [168 + dx, 200 + dy]], 9, DARK);
-  // legs: near leg forward on phase 0, far leg half a cycle later; knees bend forward
-  const sw = 46 * Math.sin(phase * Math.PI * 2);
-  const leg = (hx: number, fwd: number, col: string, w: number) => {
-    const kx = hx + fwd * 0.5, ky = 340, ax = hx + fwd;
-    p.line([[hx, 296], [kx, ky]], col, w);
-    p.line([[kx, ky], [ax, 384]], col, w);
-    // three-toed foot
-    for (const t of [-14, 0, 14]) p.stroke([[ax, 384], [ax + t, 392]], 6, "#3a2e2a");
+  // legs: femur (hip->knee, forward), tibiotarsus (knee->ankle, back),
+  // tarsometatarsus (ankle->foot, forward again). Near leg on phase 0,
+  // far leg half a cycle later; the ankle bends opposite to the knee.
+  const leg = (hx: number, sw: number, col: string, w: number, dark: boolean) => {
+    const kx = hx + sw * 0.5, ky = 340;            // knee: forward, hidden in feathers
+    const ax = kx - sw * 0.4, ay = 372;            // ankle: back, the "reversed knee"
+    const fx = ax + sw * 0.8, fy = 386;            // foot
+    p.line([[hx, 296], [kx, ky]], shade(col, dark ? 0.7 : 1), w);       // femur
+    p.line([[kx, ky], [ax, ay]], shade(col, dark ? 0.62 : 0.92), w);    // tibiotarsus
+    p.line([[ax, ay], [fx, fy]], shade(col, dark ? 0.7 : 1), w - 1);    // tarsometatarsus
+    p.dot(kx, ky, w * 0.75, shade(col, dark ? 0.6 : 0.85));              // knee joint
+    p.dot(ax, ay, w * 0.7, shade(col, dark ? 0.6 : 0.85));               // ankle joint
+    // three-toed foot with claws
+    for (const t of [-14, 0, 14]) p.stroke([[fx, fy], [fx + t, 393]], 6, "#3a2e2a");
+    p.dot(fx - 14, 393, 3, "#241726"); p.dot(fx, 393, 3, "#241726"); p.dot(fx + 14, 393, 3, "#241726");
   };
-  leg(316, -sw, shade(LEG, 0.7), 11); // far leg, darker
+  const sw = running ? 46 * Math.sin(phase * Math.PI * 2) : 8;
+  leg(316, -sw, LEG, 11, true); // far leg, darker
   // body: big pear-shaped blob, darker wing patch on the side
   p.ell(285, 215, 138, 96, BODY, 10, 0, 360, -8);
-  p.ell(285, 225, 92, 62, "#5d4128", 8, 0, 360, -15); // wing
+  p.ell(285, 225, 92, 62, "#5d4128", 8, 0, 360, -15); // far wing
   // shaggy feather strokes along the back
   for (let i = 0; i < 5; i++) p.stroke([[180 + i * 34, 140 + (i % 2) * 8], [196 + i * 34, 128 + (i % 2) * 8]], 6, DARK);
-  leg(262, sw, LEG, 12); // near leg
-  // neck: thick curved band from the body front up to the head
-  p.line(curve([368, 168], [428, 118], [452, 66]), NECK, 30);
-  // head: small, with a flat beak and one eye
-  p.ell(458, 58, 27, 20, BODY, 9, 0, 360, -10);
-  p.poly([[478, 50], [506, 60], [478, 68]], "#3a2e2a", 4);
-  p.dot(462, 52, 4.5, INK);
+  // near wing, slightly open when running
+  const wingLift = running ? 6 * Math.sin(phase * Math.PI * 2) : 0;
+  p.ell(292, 222 + wingLift, 84, 56, "#5d4128", 8, 0, 360, -12);
+  p.stroke([[232, 250], [300, 262], [352, 244]], 5, DARK);
+  leg(262, sw, LEG, 12, false); // near leg
+  // neck: S-curve in two segments from the body front up to the head.
+  // Running: upright. Pecking/drinking: bent down to the wheat / water.
+  const neckDown = pose === "peck" ? 1 : pose === "drink" ? 1.35 : 0;
+  const headX = 458 + neckDown * 14, headY = 58 + neckDown * 205;
+  const midX = 428 + neckDown * 26, midY = 118 + neckDown * 96;
+  p.line(curve([368, 168], [400, 150], [midX, midY]), NECK, 30);
+  p.line(curve([midX, midY], [headX - 6, headY + 26], [headX - 4, headY + 8]), shade(NECK, 1.08), 24);
+  // throat line down the front of the neck
+  p.stroke(curve([392, 168], [424, 158], [midX + 8, midY + 4]), 4, DARK);
+  // head: small, with a flat beak, one eye, ear opening
+  p.ell(headX, headY, 27, 20, BODY, 9, 0, 360, -10);
+  p.stroke([[headX - 16, headY - 12], [headX - 4, headY - 18]], 5, DARK); // crown feather
+  p.poly([[headX + 20, headY - 8], [headX + 48, headY + 2], [headX + 20, headY + 10]], "#3a2e2a", 4); // upper beak
+  p.poly([[headX + 20, headY + 10], [headX + 40, headY + 8], [headX + 20, headY + 15]], "#5a3b2a", 3); // lower beak
+  p.dot(headX + 30, headY - 2, 2.5, INK); // nostril
+  p.dot(headX + 4, headY - 6, 4.5, INK); // eye
+  p.dot(headX + 6, headY - 8, 1.5, "#ffffff");
+  p.stroke([[headX - 4, headY - 12], [headX + 10, headY - 14]], 3, DARK); // eyelid
+  p.dot(headX - 14, headY + 4, 3, DARK); // ear
   g.restore();
   if (flip) g.restore();
 };
 
 /** Lewis machine gun on its tripod, side view facing right, on a 600 x 400 canvas.
- *  Long barrel with cooling shroud, the big round drum magazine on top, tripod legs. */
-export const fxLewis = (p: Pen) => {
+ *  Long barrel with cooling shroud, the big round drum magazine on top, tripod legs.
+ *  Detail from projects/emu-war/anatomy/lewis.html (Fig 2, 51 parts): shroud
+ *  cooling holes, sights, gas system, trigger group, drum ribs and screws.
+ *  jammed = the S7 jam (t >= 36 s): bolt locked half-forward with its handle
+ *  up, a big brass case stuck sideways in the ejection port, drum tilted 14 deg
+ *  and lifted off its seat, smoke column.
+ *  fire = shot-cycle phase 0..1 while firing (S7 f1000-1079, 2 flashes/s);
+ *  -1 = not firing. Choreography: anatomy/koreografi-s7.md. */
+export const fxLewis = (p: Pen, jammed = false, fire = -1) => {
   const GUN = "#3a3d47", MID = "#5a5f6a", LIGHT = "#7d848c";
   // tripod legs first (behind the gun)
   p.line([[300, 216], [238, 384]], GUN, 12);
   p.line([[300, 216], [300, 386]], GUN, 12);
   p.line([[300, 216], [362, 384]], GUN, 12);
+  // spreader bar between the legs
+  p.stroke([[262, 330], [300, 318], [338, 330]], 6, LIGHT);
   // barrel + cooling shroud, muzzle to the right
   p.band([[120, 200], [520, 200]], GUN, 12, 2.5, "round");
   p.band([[210, 200], [390, 200]], MID, 30, 2.5, "round"); // shroud
+  for (let i = 0; i < 5; i++) { p.dot(240 + i * 34, 190, 3.5, GUN); p.dot(240 + i * 34, 210, 3.5, GUN); } // cooling holes
+  p.band([[210, 200], [210, 200]], LIGHT, 34, 2, "round"); // rear shroud ring
+  p.band([[390, 200], [390, 200]], LIGHT, 34, 2, "round"); // front shroud ring
   p.band([[520, 200], [548, 200]], LIGHT, 8, 2, "round"); // muzzle tip
-  // big drum magazine on top
-  p.ell(300, 148, 58, 58, MID, 10);
-  p.ell(300, 148, 30, 30, LIGHT, 7);
-  p.dot(300, 148, 8, GUN);
-  // stock + grip + trigger
+  p.dot(548, 200, 4, INK);
+  // muzzle flash while firing (first ~30% of each shot cycle)
+  if (fire >= 0 && fire < 0.3) {
+    const star: [number, number][] = [];
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4 - Math.PI / 2, r = k % 2 ? 14 : 40;
+      star.push([560 + r * Math.cos(a), 200 + r * Math.sin(a)]);
+    }
+    p.poly(star, "#fff3b0", 4);
+    p.dot(560, 200, 10, "#ffffff");
+  }
+  // front + rear sights
+  p.stroke([[530, 200], [530, 182]], 5, GUN);
+  p.stroke([[140, 200], [140, 184]], 5, GUN);
+  // gas cylinder under the barrel + regulator
+  p.band([[400, 216], [500, 216]], GUN, 8, 2, "round");
+  p.dot(500, 216, 6, LIGHT);
+  // carry handle over the shroud
+  p.stroke([[250, 184], [268, 168], [300, 168], [318, 184]], 6, LIGHT);
+  // big drum magazine on top. Jammed: tilted 14 deg and lifted 6 units off
+  // its seat, so a dark gap opens under it. The tilt is a REAL rotation
+  // (p.rot turns the screws and hub too); rotating the circles alone would
+  // be invisible, which is why the Tahap 2 tilt did not read.
+  const drumTilt = jammed ? -14 : 0;
+  const dCx = jammed ? 294 : 300, dCy = jammed ? 142 : 148;
+  if (jammed) {
+    // dark gap where the drum lifted off the feed arm
+    p.poly([[272, 196], [318, 190], [312, 212], [278, 214]], "#10121c", 2);
+    p.rot = [(drumTilt * Math.PI) / 180, dCx, dCy];
+  }
+  // jammed drum is drawn as a tilted ellipse (ry < rx, rot = tilt): a rotated
+  // circle would still look like a circle, so the tilt would not read.
+  p.ell(dCx, dCy, 58, jammed ? 50 : 58, MID, 10, 0, 360, drumTilt);
+  p.ell(dCx, dCy, 40, jammed ? 34 : 40, GUN, 7, 0, 360, drumTilt);
+  p.ell(dCx, dCy, 30, jammed ? 26 : 30, LIGHT, 7, 0, 360, drumTilt);
+  p.dot(dCx, dCy, 8, GUN);
+  for (const [dx, dy] of [[-40, -28], [40, -28], [-40, 28], [40, 28]] as const) p.dot(dCx + dx, dCy + dy, 3, "#c9ccd2"); // drum screws
+  p.rot = null;
+  // feed arm from the receiver up to the drum + pawl (broken away when jammed)
+  if (jammed) {
+    p.line([[292, 216], [294, 196]], LIGHT, 8);
+    p.stroke([[296, 190], [308, 180]], 4, "#c9a227");
+  } else {
+    p.line([[292, 216], [296, 176]], LIGHT, 8);
+    p.stroke([[296, 176], [308, 166]], 4, "#c9a227");
+  }
+  // receiver + screws
+  p.poly(rrect(120, 186, 212, 226, 6), GUN, 6);
+  for (const [x, y] of [[132, 196], [132, 216], [200, 196], [200, 216]] as const) p.dot(x, y, 3.5, LIGHT);
+  // bolt: cycles while firing, locked half-forward when jammed, with the
+  // cocking handle up; the stuck case is big bright brass, tilted out of
+  // the ejection port, with three small impact ticks.
+  const boltX = jammed ? 10 : fire >= 0 ? -12 * Math.sin(fire * Math.PI * 2) : 0;
+  // jammed bolt is bright steel so the locked-forward bolt reads at distance
+  p.band([[150 + boltX, 200], [186 + boltX, 200]], jammed ? "#c9ccd2" : LIGHT, 10, 2, "round");
+  if (jammed) {
+    p.band([[168 + boltX, 200], [168 + boltX, 170]], "#c9ccd2", 12, 2, "round"); // handle up
+    p.dot(168 + boltX, 168, 8, MID);
+    // big brass case stuck in the ejection port
+    p.poly([[172, 182], [192, 162], [204, 172], [196, 196], [180, 198]], "#ffd84a", 4);
+    p.stroke([[184, 172], [190, 192]], 3, INK);
+    p.stroke([[172, 182], [162, 170]], 3, INK);
+    // impact ticks around the stuck case
+    p.stroke([[210, 158], [220, 148]], 4, INK);
+    p.stroke([[214, 172], [226, 168]], 4, INK);
+    p.stroke([[206, 148], [210, 136]], 4, INK);
+    // tall smoke column from the jammed receiver, rising past the drum
+    p.ell(200, 156, 15, 10, "#dfe4f2", 0);
+    p.ell(216, 138, 19, 12, "#dfe4f2", 0);
+    p.ell(238, 118, 23, 14, "#dfe4f2", 0);
+    p.ell(264, 98, 25, 15, "#dfe4f2", 0);
+    p.ell(292, 80, 26, 14, "#dfe4f2", 0);
+  } else {
+    p.band([[168 + boltX, 200], [168 + boltX, 188]], LIGHT, 8, 2, "round"); // handle down
+    p.dot(168 + boltX, 187, 5, MID);
+  }
+  // stock + grip + trigger + trigger guard
   p.poly([[120, 200], [78, 214], [84, 238], [122, 222]], GUN, 6);
   p.band([[272, 216], [272, 252]], GUN, 10, 2, "round");
+  p.poly([[120, 222], [96, 244], [104, 252], [126, 230]], "#5a3b2a", 5); // pistol grip
+  p.stroke([[150, 226], [150, 244], [168, 244]], 5, LIGHT); // trigger guard
+  p.stroke([[156, 226], [160, 240]], 5, INK); // trigger
+  // recoil spring housing under the receiver
+  p.band([[122, 230], [200, 230]], MID, 7, 2, "round");
+  for (let i = 0; i < 5; i++) p.stroke([[132 + i * 14, 226], [132 + i * 14, 234]], 2, INK);
 };
 
 /** 1930s flatbed truck, side view facing right, on a 600 x 400 canvas (wheels bottom at y = 400);
- *  phase 0..1 turns the wheel spokes. flip mirrors it. */
+ *  phase 0..1 turns the wheel spokes. flip mirrors it.
+ *  Detail from projects/emu-war/anatomy/truck.html (Fig 3, 53 parts): chassis
+ *  rail, axles, driveshaft, leaf springs, mudflaps, fuel tank, exhaust,
+ *  spare wheel, and the Lewis on its pintle mount in the bed — the shake of
+ *  the bed is the shake of the gun, which is why the truck chase (S8) misses. */
 export const fxTruck = (p: Pen, phase: number, flip = false) => {
   const g = p.g;
   if (flip) { g.save(); g.translate(600, 0); g.scale(-1, 1); }
+  const bounce = 3 * Math.sin(phase * Math.PI * 2);
   const wheel = (cx: number, cy: number, r: number) => {
     g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.strokeStyle = INK; g.lineWidth = 13; g.stroke();
     g.beginPath(); g.arc(cx, cy, r - 11, 0, Math.PI * 2); g.strokeStyle = "#c9ccd2"; g.lineWidth = 4; g.stroke();
@@ -1004,20 +1144,51 @@ export const fxTruck = (p: Pen, phase: number, flip = false) => {
     }
     g.beginPath(); g.arc(cx, cy, 10, 0, Math.PI * 2); g.fillStyle = INK; g.fill();
   };
+  // chassis rail + axles + driveshaft + leaf springs (under the body, so drawn first)
+  p.band([[60, 300], [580, 300]], "#2e313a", 10, 2, "round");
+  p.band([[120, 300], [120, 330]], "#3a3d47", 8, 2, "round"); // rear axle
+  p.band([[480, 300], [480, 330]], "#3a3d47", 8, 2, "round"); // front axle
+  p.band([[150, 312], [450, 312]], "#7d848c", 5, 2, "round"); // driveshaft
+  p.dot(150, 312, 7, "#5a5f6a"); // differential
+  p.arc(120, 322, 34, 30, 200, 340, 6, "#7d848c"); // rear leaf spring
+  p.arc(480, 322, 34, 30, 200, 340, 6, "#7d848c"); // front leaf spring
+  // bodywork rides on the suspension: it bounces with the phase
+  g.save(); g.translate(0, bounce);
   // flat bed (rear) + cab + hood (front right)
   p.poly(rrect(56, 252, 380, 292, 10), "#7a5a3a", 9); // bed
   p.line([[80, 272], [360, 272]], "#5a3d26", 4);
-  // the Lewis gun mounted on the bed: drum on top, barrel pointing forward
+  for (const x of [140, 200, 260, 320]) p.line([[x, 252], [x, 292]], "#5a3d26", 3); // bed planks
+  // Hairline Tahap 4: two fine wavy grain strokes along the bed planks
+  p.line([[80, 262], [160, 260], [240, 263], [320, 261], [360, 262]], "#5a3d26", 2);
+  p.line([[80, 282], [170, 284], [250, 281], [330, 283], [360, 282]], "#5a3d26", 2);
+  p.poly(rrect(56, 236, 68, 252, 4), "#8a6a44", 6); // tailgate edge
+  // spare wheel lashed to the side of the bed
+  p.ell(100, 232, 22, 22, "#1c1c22", 6);
+  p.ell(100, 232, 10, 10, "#c9ccd2", 4);
+  // the Lewis gun mounted on a pintle in the bed: drum on top, barrel pointing forward
+  p.line([[240, 252], [240, 218]], "#3a3d47", 9); // pintle post
+  p.line([[222, 252], [240, 224]], "#3a3d47", 7);
+  p.line([[258, 252], [240, 224]], "#3a3d47", 7);
   p.band([[150, 218], [330, 218]], "#3a3d47", 10, 2, "round");
   p.ell(240, 190, 34, 34, "#5a5f6a", 8);
   p.ell(240, 190, 17, 17, "#7d848c", 6);
-  p.line([[240, 224], [216, 252]], "#3a3d47", 9);
-  p.line([[240, 224], [264, 252]], "#3a3d47", 9);
+  p.dot(240, 190, 5, INK);
   p.poly(rrect(384, 150, 500, 292, 8), "#5a6a3a", 9); // cab
   p.poly(rrect(404, 168, 480, 216, 6), "#bfe3f2", 7); // cab window
+  p.poly(rrect(486, 168, 496, 216, 4), "#bfe3f2", 6); // windscreen
   p.poly(rrect(500, 206, 566, 292, 8), "#5a6a3a", 9); // hood
   p.poly(rrect(566, 216, 586, 292, 6), "#3a3d47", 8); // radiator grille
+  for (let i = 0; i < 4; i++) p.line([[570, 228 + i * 16], [582, 228 + i * 16]], "#7d848c", 3); // grille slats
   p.ell(560, 232, 10, 10, "#ffd84a", 6); // headlight
+  p.ell(560, 268, 8, 8, "#ffd84a", 5); // second headlight
+  p.poly(rrect(580, 286, 592, 296, 3), "#7d848c", 4); // bumper
+  p.poly(rrect(560, 300, 580, 316, 4), "#7d848c", 4); // fuel tank cap
+  // running board + exhaust + mudflaps
+  p.poly(rrect(380, 292, 470, 304, 4), "#3a3d47", 5);
+  p.band([[520, 300], [520, 340], [540, 340]], "#7d848c", 6, 2, "round"); // exhaust
+  p.poly([[96, 300], [84, 352], [104, 352], [112, 302]], "#2e313a", 4); // rear mudflap
+  p.poly([[524, 300], [536, 352], [516, 352], [508, 302]], "#2e313a", 4); // front mudflap
+  g.restore();
   // fenders over the wheels
   p.arc(150, 330, 66, 66, 180, 360, 10);
   p.arc(470, 330, 66, 66, 180, 360, 10);

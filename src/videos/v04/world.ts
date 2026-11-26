@@ -5,10 +5,8 @@
 // update(id, f, camera) poses everything for shot `id` at frame f (pure function of id + f).
 // Light rig / sky / fog / clouds follow the bridge template.
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { staticFile } from "remotion";
 import { Batch, boxGeo, V, lam, house, prop, Kit, kitClone } from "./build";
-import { ctex, beam, stoneHD, wheatHD, dirtHD, cloudHD } from "./paint";
+import { ctex, beam, stoneHD, wheatHD, dirtHD, cloudHD, grainHD, grainDarkHD, strawHD, rippleHD } from "./paint";
 import { Pen } from "./toon";
 import { LIGHTS, LOOK, LightPreset } from "./lights";
 import { TONE, CHAR, untone } from "./shade";
@@ -17,18 +15,12 @@ import { Pool, Actor, Fx, stage } from "./cast";
 import { FPS, SHOTS, camAt, storyState, FARM_POS, HOLE_POS, FOREGROUND, ShotDef } from "./story";
 
 // ---------------- assets ----------------
-const KENNEY = ["tree_oak", "tree_default", "tree_detailed", "tree_fat", "tree-high-round", "tree", "plant_bushLarge", "plant_bushDetailed",
-  "plant_bush", "hedge", "flower_redA", "flower_yellowA", "flower_purpleA", "grass_large", "grass", "lily_large", "lantern", "cart", "stall-red",
-  "stall-green", "stall-bench", "banner-red", "banner-green", "windmill", "canoe"];
-let kitP: Promise<Kit> | null = null;
-export const loadKit = () => {
-  if (!kitP) {
-    const loader = new GLTFLoader();
-    kitP = Promise.all(KENNEY.map((n) => loader.loadAsync(staticFile(`bridge/kenney/${n}.glb`)).then((g) => [n, g.scene] as const).catch(() => [n, null] as const)))
-      .then((list) => Object.fromEntries(list.filter((e) => e[1]).map(([n, s]) => [n, s!])) as Kit);
-  }
-  return kitP;
-};
+// Tahap 6: folder public/bridge/kenney/ TIDAK ADA, jadi loader GLB lama hanya
+// menembak 26 request 404 di tiap render (dan sempat membuat still f550/f735
+// gagal timeout di puppeteer-evaluate). Semua prop kit memang sudah null dan
+// dilewati prop()/kitClone() di build.ts; vegetasi digambar dari kode (VEG),
+// jadi kit kosong memberi hasil visual yang persis sama tanpa badai 404.
+export const loadKit = (): Promise<Kit> => Promise.resolve({} as Kit);
 
 // ---------------- painted canvas textures ----------------
 /** sun disc (solid, soft rim) and the flat golden halo */
@@ -119,9 +111,17 @@ export class World {
     M.mud = lam("mud", () => ({ map: dirtHD(), color: "#9a7a52" }));
     M.cream = lam("farmCream", () => ({ map: stoneHD("farmCream", ["#e6dccd", "#ddd3c3", "#ece4d6", "#d6cbba"], "#aea293") }));
     M.wood = lam("wood", () => ({ map: beam() }));
-    M.dark = lam("darkWood", () => ({ color: "#5a3b2a" }));
+    M.dark = lam("darkWood", () => ({ map: grainDarkHD() }));
     M.fence = lam("fenceWood", () => ({ color: "#8a6a44" }));
-    M.waterBlue = new THREE.MeshBasicMaterial({ color: "#4aa8d8", transparent: true, opacity: 0.75 });
+    // Hairline Tahap 4: grain along the fence RAILS only (posts stay flat — a horizontal
+    // grain on a vertical post would read the wrong way); crates share the dark grain.
+    M.fenceRail = lam("fenceRail", () => ({ map: grainHD() }));
+    M.waterBlue = new THREE.MeshBasicMaterial({ map: rippleHD(), transparent: true, opacity: 0.85 });
+    M.sand = lam("sandbag", () => ({ color: "#9a8a5e" }));
+    M.reed = lam("reed", () => ({ color: "#6a7a3a" }));
+    M.rock = lam("rock", () => ({ color: "#8a8578" }));
+    M.hay = lam("hay", () => ({ map: strawHD() }));
+    M.rut = lam("rut", () => ({ color: "#7a5c3a" }));
     // wheat everywhere, dirt road down the middle, a dirt yard in front of the farmhouse
     b.add(quadAt(-900, 900, -900, 900, 0, 225, 225), M.wheat);
     b.add(quadAt(-2.5, 2.5, -45, 60, 0.012, 1.2, 10), M.dirt); // fewer repeats: reads as dirt, not paving
@@ -147,20 +147,63 @@ export class World {
       if (x >= -2 && x < 2) continue; // no rails across the gap
       if (x === 8) { // the sagging rail: one end dropped
         const m = new THREE.Matrix4().makeRotationZ(-0.18).setPosition(x, 0.62, FZ);
-        b.add(boxGeo(V(0, 0, -0.05), V(2, 0.12, 0.05), 0), M.fence, m);
+        b.add(boxGeo(V(0, 0, -0.05), V(2, 0.12, 0.05), 0), M.fenceRail, m);
         continue;
       }
-      b.add(boxGeo(V(x, 0.95, FZ - 0.05), V(x + 2, 1.07, FZ + 0.05), 0), M.fence);
-      b.add(boxGeo(V(x, 0.55, FZ - 0.05), V(x + 2, 0.67, FZ + 0.05), 0), M.fence);
+      b.add(boxGeo(V(x, 0.95, FZ - 0.05), V(x + 2, 1.07, FZ + 0.05), 0), M.fenceRail);
+      b.add(boxGeo(V(x, 0.55, FZ - 0.05), V(x + 2, 0.67, FZ + 0.05), 0), M.fenceRail);
     }
     // fallen pieces by the gap: a rail knocked flat and a post lying on the ground
-    b.add(boxGeo(V(-2.5, 0.05, -9.3), V(-0.5, 0.2, -9.1), 0), M.fence);
+    b.add(boxGeo(V(-2.5, 0.05, -9.3), V(-0.5, 0.2, -9.1), 0), M.fenceRail);
     b.add(boxGeo(V(1.4, 0.05, -9.8), V(1.6, 0.18, -8.2), 0), M.fence);
     // ammo crates by the gun positions (shots 5-7): two on the road verge, one by the waterhole
     b.add(boxGeo(V(5.1, 0, 9.6), V(5.65, 0.55, 10.15), 0), M.dark);
     b.add(boxGeo(V(5.15, 0.55, 9.7), V(5.6, 1.0, 10.1), 0), M.dark);
     b.add(boxGeo(V(-5.65, 0, 9.6), V(-5.1, 0.55, 10.15), 0), M.dark);
     b.add(boxGeo(V(-9.5, 0, 24.5), V(-8.95, 0.5, 25.05), 0), M.dark);
+    // ---- anatomy upgrade (Tahap 2): sandbag parapets at the gun positions (S5/S6 road guns
+    //  and the S7 waterhole gun), reeds + rocks around the watering hole, hay bales and wheat
+    //  sheaves in the field, wheel ruts along the road (the S8 truck chase). All boxGeo, no GLB. ----
+    const sandbag = (x: number, z: number, yaw: number) => {
+      const m = new THREE.Matrix4().makeRotationY(yaw);
+      const put = (dx: number, dy: number, dz: number, w: number, h: number, d: number) => {
+        const mm = new THREE.Matrix4().makeTranslation(x + dx, dy, z + dz).multiply(m);
+        b.add(boxGeo(V(-w / 2, 0, -d / 2), V(w / 2, h, d / 2), 0), M.sand, mm);
+      };
+      put(-0.3, 0, 0, 0.6, 0.22, 0.34); put(0.3, 0, 0, 0.6, 0.22, 0.34);
+      put(0, 0.22, 0, 0.6, 0.22, 0.34);
+    };
+    // low sandbag stacks flanking the road at the two road guns (S5/S6): kept clear of the
+    // road centre (|x| < 2) so the S8 truck chase never drives through them, and clear of
+    // the guns themselves so the Lewis tripods stay visible from the S5/S6 cameras
+    for (const [x, z] of [[-5.2, 9.0], [-4.6, 10.1], [4.6, 10.1], [5.2, 9.0]] as const) sandbag(x, z, 0.4);
+    // crescent around the waterhole gun (west + north only: the east stays clear for the ambush party)
+    for (const [x, z, y] of [[-12.6, 22.6, 0.5], [-12.9, 23.9, -0.4], [-11.6, 21.7, 0.9], [-9.2, 21.9, -0.7]] as const) sandbag(x, z, y);
+    // reeds around the waterhole (same east-sector gap as the emu ring) + rocks at the water's edge
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + 0.2;
+      if (a < 0.96) continue;
+      const r = 4.7 + (i % 3) * 0.4, x = HOLE_POS[0] + r * Math.cos(a), z = HOLE_POS[2] + r * Math.sin(a) * 0.8;
+      const m = new THREE.Matrix4().makeRotationZ((i % 2 ? -1 : 1) * 0.12).setPosition(x, 0.6, z);
+      b.add(boxGeo(V(-0.035, -0.6, -0.035), V(0.035, 0.6, 0.035), 0), M.reed, m);
+    }
+    for (const [x, z, s] of [[-11.8, 17.2, 0.6], [-19.5, 23.5, 0.45], [-13.5, 24.6, 0.5], [-18.8, 16.8, 0.4], [-12.2, 15.9, 0.55]] as const)
+      b.add(boxGeo(V(x - s / 2, 0, z - s / 2), V(x + s / 2, s * 0.6, z + s / 2), 0), M.rock);
+    // hay bales in the field, clear of the road, fence line, farmhouse, waterhole and camera corridors
+    for (const [x, z] of [[-24, -20], [26, -28], [-30, 10], [30, 36], [-20, 44]] as const) {
+      b.add(boxGeo(V(x - 0.75, 0, z - 0.45), V(x + 0.75, 0.9, z + 0.45), 0), M.hay);
+      b.add(boxGeo(V(x - 0.45, 0.9, z - 0.75), V(x + 0.45, 1.35, z + 0.75), 0), M.hay);
+    }
+    // wheat sheaves by the farmhouse yard (S2/S4)
+    for (const [x, z, tilt] of [[18.5, -12.5, 0.1], [31.5, -12, -0.12], [22, -20.5, 0.08]] as const) {
+      const m = new THREE.Matrix4().makeRotationZ(tilt).setPosition(x, 0.6, z);
+      b.add(boxGeo(V(-0.2, -0.6, -0.2), V(0.2, 0.6, 0.2), 0), M.hay, m);
+      const m2 = new THREE.Matrix4().makeRotationZ(tilt).setPosition(x, 0.75, z);
+      b.add(boxGeo(V(-0.22, -0.06, -0.22), V(0.22, 0.06, 0.22), 0), M.dark, m2);
+    }
+    // wheel ruts along the dirt road (the S8 truck chase)
+    b.add(quadAt(-1.6, -1.0, -45, 60, 0.014, 1, 10), M.rut);
+    b.add(quadAt(1.0, 1.6, -45, 60, 0.014, 1, 10), M.rut);
     // ---- watering hole at HOLE_POS (-16,0,20): mud ring + blue water disc ----
     const mud = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 5.5, 0.06, 24), M.mud);
     mud.position.set(HOLE_POS[0], 0.03, HOLE_POS[2]); mud.receiveShadow = true; R.add(mud);
