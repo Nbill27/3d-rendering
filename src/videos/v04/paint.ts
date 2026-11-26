@@ -93,6 +93,64 @@ export const beam = () => ctex("beam", 256, 256, (g, r) => {
   for (let i = 0; i < 22; i++) { const y = r() * 256; g.beginPath(); g.moveTo(0, y); g.bezierCurveTo(90, y + 5, 170, y - 5, 256, y); g.stroke(); }
 });
 
+/** Hairline line textures (Tahap 4, Emu War): one repeated thin stroke that states the
+ *  material's direction — wood grain along the board, straw along the bale, ripples
+ *  across the water. No new colour, no busy pattern; the stroke only says what the
+ *  surface is made of. */
+const woodGrainTex = (key: string, base: string, dark: string, light: string, n = 26) => ctex(key, 512, 512, (g, r) => {
+  const S = 512;
+  g.fillStyle = base; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < n; i++) // long wavy grain lines along +x, one in four light
+    grain(g, r, S, U(r, 0, S), U(r, 8, S - 8), U(r, 300, 512), U(r, 2, 7), U(r, 2, 3.5), i % 4 === 0 ? light : dark);
+  for (let i = 0; i < 5; i++) // a few longer, darker figure lines, still thinner than a seam
+    grain(g, r, S, U(r, 0, S), U(r, 30, S - 30), U(r, 400, 512), U(r, 4, 9), 3.5, dark);
+  if (r() < 0.7) { // one knot: concentric soft rings, darker heart
+    const kx = U(r, 90, S - 90), ky = U(r, 90, S - 90), rx = U(r, 12, 20), ry = rx * U(r, 0.5, 0.65);
+    g.strokeStyle = "rgba(70,45,20,0.25)"; g.lineWidth = 2;
+    g.beginPath(); g.ellipse(kx, ky, rx * 2.2, ry * 1.9, 0, 0, TAU); g.stroke();
+    g.fillStyle = "rgba(70,45,20,0.3)"; g.beginPath(); g.ellipse(kx, ky, rx, ry, 0, 0, TAU); g.fill();
+  }
+});
+/** fence rails: the farmhouse fence brown, grain along the rail.
+ *  Only 7 lines: a rail face is 0.12 m tall and maps the whole tile, so 26 lines
+ *  would average out to nothing on screen; 7 stay readable. */
+export const grainHD = () => woodGrainTex("grainHD", "#8a6a44", "rgba(70,45,20,0.5)", "rgba(255,220,170,0.25)", 7);
+/** ammo crates: the same stroke in dark crate brown */
+export const grainDarkHD = () => woodGrainTex("grainDarkHD", "#5a3b2a", "rgba(30,16,8,0.55)", "rgba(255,210,160,0.22)");
+/** hay bales + wheat sheaves: stacked straw, thin curved strokes along the bale */
+export const strawHD = () => ctex("strawHD", 512, 512, (g, r) => {
+  const S = 512;
+  g.fillStyle = "#c9a227"; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 40; i++)
+    grain(g, r, S, U(r, 0, S), U(r, 8, S - 8), U(r, 200, 512), U(r, 2, 6), U(r, 1.5, 2.5),
+      r() < 0.5 ? "rgba(140,110,20,0.5)" : "rgba(240,215,110,0.45)");
+  for (let i = 0; i < 12; i++) { // a few stray stalks crossing the rest
+    const x = U(r, 0, S), y = U(r, 0, S), a = U(r, -0.5, 0.5), len = U(r, 30, 70);
+    g.strokeStyle = "rgba(120,95,15,0.45)"; g.lineWidth = 2; g.lineCap = "round";
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + len * Math.cos(a), y + len * Math.sin(a)); g.stroke();
+  }
+});
+/** watering-hole surface: concentric hairline ripple rings + short arcs, on blue.
+ *  The cylinder top cap maps the texture as a circle, so the rings read as ripples. */
+export const rippleHD = () => ctex("rippleHD", 512, 512, (g, r) => {
+  const S = 512, C = S / 2;
+  const gr = g.createLinearGradient(0, 0, 0, S);
+  gr.addColorStop(0, "#4a9fd8"); gr.addColorStop(1, "#3587c8");
+  g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  g.lineCap = "round";
+  for (let rad = 40; rad <= 230; rad += 32) { // ripple rings, bright crest + dark trough under it
+    g.strokeStyle = "rgba(220,245,255,0.5)"; g.lineWidth = 3;
+    g.beginPath(); g.arc(C, C, rad, 0, TAU); g.stroke();
+    g.strokeStyle = "rgba(20,80,130,0.28)"; g.lineWidth = 2;
+    g.beginPath(); g.arc(C, C, rad + 5, 0, TAU); g.stroke();
+  }
+  for (let i = 0; i < 24; i++) { // short broken arcs: wind on the water
+    const rad = U(r, 30, 240), a0 = U(r, 0, TAU), a1 = a0 + U(r, 0.4, 1.1);
+    g.strokeStyle = "rgba(255,255,255,0.55)"; g.lineWidth = U(r, 2, 3);
+    g.beginPath(); g.arc(C, C, rad, a0, a1); g.stroke();
+  }
+});
+
 export const water = () => ctex("water", 512, 512, (g, r) => {
   const gr = g.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, "#3d92da"); gr.addColorStop(0.5, "#3487d0"); gr.addColorStop(1, "#3d92da");
   g.fillStyle = gr; g.fillRect(0, 0, 512, 512);
