@@ -14,7 +14,7 @@ import {
 import {
   FPS, D0, SHOTS, STREET_X, TRACK_X, DITCH_POS,
   walkZ, diveAt, trainZ, stumbleZ, dazedZ, StoryState,
-  clamp01,
+  clamp01, easeOutCubic,
 } from "./story";
 import { NOINK } from "./ink";
 import { cardShade, blobMaterial, CARD_K } from "./cardshade";
@@ -219,20 +219,33 @@ const blob = (out: Stage, x: number, y: number, z: number, sc = 1, k = 1) => {
 };
 
 // ---------------- train, blast, smoke (effect cards) ----------------
-/** the 1940s passenger train carriage, moving south on the tracks; flip = facing screen-left */
+/** the 1940s passenger train carriage, moving south on the tracks; flip = facing screen-left.
+ *  Tahap 6: kartu 12 x 6 m -> 6,5 x 3,25 m. Kartu lama lebih lebar dari frame pada jarak kamera
+ *  17 m (lebar frame ~7,3 m), jadi lokomotif + cerobong terpotong di tepi kiri dan gerbong di
+ *  kanan, uapnya melayang lepas; kereta 6 m pun terlalu tinggi dibanding karakter 2,16 m.
+ *  Kartu baru muat penuh (88% lebar frame), tinggi 3,25 m proporsional dengan karakter, dan
+ *  roda bawahnya (kanvas y 348/400) menyentuh rel (y 0,14). */
 const train = (out: Stage, t: number, z: number, flip = true) => {
   const qp = Math.round((((t * 0.9) % 1) + 1) % 1 * 8) / 8;
-  out.fx.push({ key: `train|${flip ? "L" : "R"}|${qp}`, cw: 600, ch: 400, draw: (p) => fxTrain(p, qp, flip),
-    x: TRACK_X, y: 3, z, w: 9, h: 6 });
+  out.fx.push({ key: `train|${flip ? "L" : "R"}|${qp}`, cw: 800, ch: 400, draw: (p) => fxTrain(p, qp, flip),
+    x: TRACK_X, y: 1.625, z, w: 6.5, h: 3.25 });
 };
-/** the atomic blast: a white-hot star burst in the sky, growing over ~1.2 s from the flash frame */
+/** the atomic blast: a white-hot star burst in the sky, growing over ~1.2 s from the flash frame.
+ *  Tahap 3 (anatomy_reveal): this sits HIGH in the sky on purpose — the reveal
+ *  (projects/yamaguchi/anatomy/reveal-little-boy.html, koreografi-s3.md) shows Little Boy
+ *  detonating at 580 m, an airburst, never a ground impact. Do not lower this to the ground. */
 const blast = (out: Stage, x: number, y: number, z: number, t: number, t0: number) => {
   const bt = clamp01((t - t0) / 1.2);
   if (bt <= 0) return;
+  // Tahap 5: kartu membesar ease-out cubic (cepat mekar, lambat mengendap, tanpa overshoot) —
+  // momen berat, bukan main-main. Gambar di dalamnya (fxBurst) sudah ease-out sendiri.
+  const be = easeOutCubic(bt);
   out.fx.push({ key: `blast|${Math.round(bt * 8) / 8}`, cw: 500, ch: 500, draw: (p) => fxBurst(p, bt),
-    x, y, z, w: 14 + 10 * bt, h: 14 + 10 * bt });
+    x, y, z, w: 14 + 10 * be, h: 14 + 10 * be });
 };
-/** the distant mushroom cloud after a blast, rising over ~3 s */
+/** the distant mushroom cloud after a blast, rising over ~3 s.
+ *  Tahap 3: rises from a HIGH point in the sky (airburst at 580 m, reveal beat 6),
+ *  never from the ground — there is no crater in S4, only ruins and smoke columns. */
 const mushroom = (out: Stage, x: number, y: number, z: number, t: number, t0: number) => {
   const mt = clamp01((t - (t0 + 0.6)) / 3);
   if (mt <= 0) return;
@@ -257,33 +270,41 @@ const supervisor: Who = { i: 630, o: { ...LECTURER, skin: SKINS[0] }, okey: "sup
 const oldYamaguchi: Who = { i: 640, o: { ...YAMAGUCHI_OLD, skin: SKINS[1] }, okey: "yamo" };
 const official: Who = { i: 650, o: { ...OFFICIAL_JP, skin: SKINS[0] }, okey: "off" };
 
+/** Tahap 5 (motion_design): standing characters breathe — a slow ±0.7° torso sway
+ *  (secondary layer) so no standing shot is a frozen pose. Heavy moments (flash,
+ *  dive) deliberately have NO sway: the blast beats stay weighty and held. */
+const breathe = (t: number, i: number) => 0.7 * Math.sin(t * 1.4 + i * 1.7);
+
 /** the hook (crowd "street", shot 1): Yamaguchi walks south down the Hiroshima street toward
  *  the station, two colleagues behind him, townsfolk on the pavement, morning light */
 const streetCrowd = (t: number, cam: CamInfo, out: Stage) => {
   const z = walkZ(t);
   const view = viewOf(cam, STREET_X, z, 0, 1);
-  const so: SideOpts = { mode: "march", phase: (t * 0.9) % 1, expr: "neutral", blink: lidAt(t, 600) };
-  const fo: FrontOpts = { mode: "stroll", phase: (t * 0.9) % 1, expr: "neutral", blink: lidAt(t, 600) };
+  const so: SideOpts = { mode: "march", phase: (t * 0.9) % 1, expr: "alert", blink: lidAt(t, 600) };
+  const fo: FrontOpts = { mode: "stroll", phase: (t * 0.9) % 1, expr: "alert", blink: lidAt(t, 600) };
   out.places.push(person(cam, yamaguchi(false), STREET_X, D0, z, view, fo, so));
   blob(out, STREET_X, D0, z);
   for (const [i, dz] of [[0, -4], [1, -7]] as const) {
     const v2 = viewOf(cam, STREET_X + (i ? 1.2 : -1.2), z + dz, 0, 1);
-    const so2: SideOpts = { mode: "march", phase: (t * 0.9 + i * 0.3) % 1, expr: "neutral", blink: lidAt(t, i + 610) };
-    const fo2: FrontOpts = { mode: "stroll", phase: (t * 0.9 + i * 0.3) % 1, expr: "neutral", blink: lidAt(t, i + 610) };
+    const so2: SideOpts = { mode: "march", phase: (t * 0.9 + i * 0.3) % 1, expr: "alert", blink: lidAt(t, i + 610) };
+    const fo2: FrontOpts = { mode: "stroll", phase: (t * 0.9 + i * 0.3) % 1, expr: "alert", blink: lidAt(t, i + 610) };
     out.places.push(person(cam, colleague(i), STREET_X + (i ? 1.2 : -1.2), D0, z + dz, v2, fo2, so2));
     blob(out, STREET_X + (i ? 1.2 : -1.2), D0, z + dz);
   }
   // townsfolk on the pavement, watching the morning street
-  for (const [i, x, zz] of [[0, 5.5, -18], [1, -5.5, -24]] as const) {
+  // Perbaikan 3 (still3_90): townsfolk barat -5,5 -> -4,2 — di still2_90 dan still3_90
+  // dia (dan pejalan kaki -5,6) terpotong setengah di tepi kiri meski kamera S1 sudah
+  // dimundurkan + look digeser ke barat; mereka digeser ke timur supaya masuk frame utuh.
+  for (const [i, x, zz] of [[0, 5.5, -18], [1, -4.2, -23.5]] as const) {
     out.places.push(person(cam, colleague(i + 10), x, D0, zz, { side: false, mirror: false },
-      { mode: "stand", expr: "neutral", blink: lidAt(t, i + 620), look: 0 }, {}));
+      { mode: "stand", expr: "alert", blink: lidAt(t, i + 620), look: 0, tilt: breathe(t, i + 620) }, {}));
     blob(out, x, D0, zz);
   }
   // distant pedestrians by the market stall, deep in the background left (kept clear of the
   // stall's footprint so no counter clips through them); one stands in the left mid-ground
-  for (const [i, x, zz] of [[0, -3.0, -25], [1, -2.0, -23], [2, -5.6, -25.8]] as const) {
+  for (const [i, x, zz] of [[0, -2.6, -25], [1, -2.0, -23], [2, -4.2, -25.8]] as const) {
     out.places.push(person(cam, colleague(i + 20), x, D0, zz, { side: false, mirror: false },
-      { mode: "stand", expr: "neutral", blink: lidAt(t, i + 660), look: 0 }, {}));
+      { mode: "stand", expr: "alert", blink: lidAt(t, i + 660), look: 0, tilt: breathe(t, i + 660) }, {}));
     blob(out, x, D0, zz);
   }
 };
@@ -292,17 +313,20 @@ const streetCrowd = (t: number, cam: CamInfo, out: Stage) => {
  *  office, papers in hand, the last calm morning. They stand WEST of the office front (x=9.5),
  *  in the yard facing the street — never inside the building. */
 const officeCrowd = (t: number, cam: CamInfo, out: Stage) => {
-  const XS = [3.5, 6, 7.5];
+  // Tahap 6: grup dirapatkan (3,5/6/7,5 -> 4/5,5/7, juru tulis 2,5 -> 3) karena di
+  // still2_225 kamera yang didekatkan memotong rekan ketiga di tepi kanan dan juru tulis
+  // hilang; lebar grup 4 m kini muat dalam frame ~5,2 m pada jarak kamera baru.
+  const XS = [4, 5.5, 7];
   XS.forEach((x, i) => {
     const who = i === 1 ? yamaguchi(false) : colleague(i);
     out.places.push(person(cam, who, x, D0, -27, { side: false, mirror: false },
-      { mode: "stand", expr: i === 1 ? "smile" : "neutral", blink: lidAt(t, i + 630), look: 0 }, {}));
+      { mode: "stand", expr: i === 1 ? "smile" : "alert", blink: lidAt(t, i + 630), look: 0, tilt: breathe(t, i + 630) }, {}));
     blob(out, x, D0, -27);
   });
   // a clerk carries a stack of papers toward the office door
-  out.places.push(person(cam, colleague(5), 2.5, D0, -28.5, { side: false, mirror: false },
-    { mode: "stroll", phase: (t * 0.5) % 1, expr: "neutral", blink: lidAt(t, 635), look: 0 }, {}));
-  blob(out, 2.5, D0, -28.5);
+  out.places.push(person(cam, colleague(5), 3, D0, -27.5, { side: false, mirror: false },
+    { mode: "stroll", phase: (t * 0.5) % 1, expr: "alert", blink: lidAt(t, 635), look: 0 }, {}));
+  blob(out, 3, D0, -27.5);
 };
 
 /** the first blast (crowd "flash1", shot 3): Yamaguchi walks on the street; at 12.5 s the sky
@@ -312,8 +336,8 @@ const flash1Crowd = (t: number, cam: CamInfo, out: Stage) => {
   const z = flashed ? -12 : walkZ(t);
   if (!flashed) {
     const view = viewOf(cam, STREET_X, z, 0, 1);
-    const so: SideOpts = { mode: "march", phase: (t * 0.9) % 1, expr: "neutral", blink: lidAt(t, 600) };
-    const fo: FrontOpts = { mode: "stroll", phase: (t * 0.9) % 1, expr: "neutral", blink: lidAt(t, 600) };
+    const so: SideOpts = { mode: "march", phase: (t * 0.9) % 1, expr: "alert", blink: lidAt(t, 600) };
+    const fo: FrontOpts = { mode: "stroll", phase: (t * 0.9) % 1, expr: "alert", blink: lidAt(t, 600) };
     out.places.push(person(cam, yamaguchi(false), STREET_X, D0, z, view, fo, so));
     blob(out, STREET_X, D0, z);
   } else {
@@ -364,19 +388,33 @@ const ruin1Crowd = (t: number, cam: CamInfo, out: Stage) => {
 const trainCrowd = (t: number, cam: CamInfo, out: Stage) => {
   const z = trainZ(t);
   train(out, t, z, true);
-  // steam puffs above the carriage front
-  for (let k = 0; k < 2; k++) {
-    const pt = (t * 1.5 + k * 0.5) % 1;
+  // steam puffs above the locomotive chimney at the FRONT of the train (south, z+2.9):
+  // the locomotive leads, so the steam rises ahead of the carriage, not over its middle.
+  // Tahap 6: cerobong ikut kartu baru (kanvas x 757 -> z+2,9; puncak y 2,49), jadi uap
+  // dipindah dari z+5,5/y 5,5 ke z+2,9/y 2,7 dan dikecilkan supaya menempel di cerobong.
+  for (let k = 0; k < 3; k++) {
+    const pt = (t * 1.5 + k * 0.33) % 1;
     out.fx.push({ key: `puff|${Math.round(pt * 8) / 8}`, cw: 300, ch: 300, draw: (p) => fxPuff(p, pt),
-      x: TRACK_X, y: 5.5, z: z + 4 - k * 2, w: 1.8, h: 1.8, soft: true });
+      x: TRACK_X, y: 2.6 + k * 0.3, z: z + 2.9 - k * 0.7, w: 1.6, h: 1.6, soft: true });
   }
-  // Yamaguchi at the open door, standing on the carriage floor (y 0.9), no ground blob
-  out.places.push(person(cam, yamaguchi(true), TRACK_X + 0.5, 0.9, z, { side: false, mirror: false },
+  // the door step Yamaguchi stands on (anatomy: door-step sits on the carriage
+  // underframe) — his feet stand on a step, not on air above the wheels.
+  // Tahap 6: pintu gerbong pada kartu baru ada di z-0,72 (kanvas x 470-504), jadi anak
+  // tangga ikut ke z-0,7, tepat di bawah kaki Yamaguchi.
+  out.fx.push({ key: "trainstep", cw: 200, ch: 60, draw: (p) => {
+    p.poly([[10, 18], [190, 18], [190, 44], [10, 44]], "#223626", 6);
+    p.stroke([[14, 30], [186, 30]], 4, "#5a5f6a");
+  }, x: TRACK_X + 0.5, y: 0.85, z: z - 0.7, w: 1.4, h: 0.4 });
+  // Yamaguchi at the open door, standing on the carriage floor (y 0.9), no ground blob.
+  // Tahap 6: dia digeser ke pintu (z-0,7) supaya benar-benar berdiri di ambang pintu,
+  // bukan 1,3 m di selatannya di depan jendela.
+  out.places.push(person(cam, yamaguchi(true), TRACK_X + 0.5, 0.9, z - 0.7, { side: false, mirror: false },
     { mode: "stand", expr: "pained", blink: lidAt(t, 600), look: 0 }, {}));
   // a colleague at the carriage door just north of Yamaguchi (screen-right from the camera).
   // He must stay on the NORTH side of the train card's plane: the card faces the camera from the
   // north, so anyone south of its plane (z+2.5) is hidden behind it.
-  out.places.push(person(cam, colleague(1), TRACK_X + 0.5, 0.9, z - 1.2, { side: false, mirror: false },
+  // Tahap 6: rekan digeser ke z-1,3 supaya tetap di atas anak tangga (tepi utara z-1,4).
+  out.places.push(person(cam, colleague(1), TRACK_X + 0.5, 0.9, z - 1.3, { side: false, mirror: false },
     { mode: "stand", expr: "dazed", blink: lidAt(t, 611), look: 0 }, {}));
 };
 
@@ -386,15 +424,15 @@ const trainCrowd = (t: number, cam: CamInfo, out: Stage) => {
 const office2Crowd = (t: number, cam: CamInfo, out: Stage) => {
   // the supervisor listens, arms folded by his stern face
   out.places.push(person(cam, supervisor, 6, D0, 30, { side: false, mirror: false },
-    { mode: "stand", expr: "stern", blink: lidAt(t, 630), look: 0 }, {}));
+    { mode: "stand", expr: "stern", blink: lidAt(t, 630), look: 0, tilt: breathe(t, 630) }, {}));
   blob(out, 6, D0, 30);
   // Yamaguchi tells the story, one hand raised as he describes the blast
   out.places.push(person(cam, yamaguchi(true), 4, D0, 29, { side: false, mirror: false },
-    { mode: "stand", expr: "shock", blink: lidAt(t, 600), wave: 0.5 + 0.25 * Math.sin(t * 2.4), look: 0 }, {}));
+    { mode: "stand", expr: "shock", blink: lidAt(t, 600), wave: 0.5 + 0.25 * Math.sin(t * 2.4), look: 0, tilt: breathe(t, 600) }, {}));
   blob(out, 4, D0, 29);
-  for (const [i, x] of [[0, 2.5], [1, 7]] as const) {
+  for (const [i, x] of [[0, 3], [1, 6.5]] as const) {
     out.places.push(person(cam, colleague(i), x, D0, 28.5, { side: false, mirror: false },
-      { mode: "stand", expr: i ? "nervous" : "neutral", blink: lidAt(t, i + 645), look: 0 }, {}));
+      { mode: "stand", expr: i ? "nervous" : "alert", blink: lidAt(t, i + 645), look: 0, tilt: breathe(t, i + 645) }, {}));
     blob(out, x, D0, 28.5);
   }
 };
@@ -407,14 +445,14 @@ const flash2Crowd = (t: number, cam: CamInfo, out: Stage) => {
   const flashed = t >= 35;
   const expr: Expr = flashed ? "shock" : "stern";
   out.places.push(person(cam, supervisor, 6, D0, 30, { side: false, mirror: false },
-    { mode: "stand", expr, blink: lidAt(t, 630, [35]), look: 0 }, {}));
+    { mode: "stand", expr, blink: lidAt(t, 630, [35]), look: 0, tilt: flashed ? 0 : breathe(t, 630) }, {}));
   blob(out, 6, D0, 30);
   out.places.push(person(cam, yamaguchi(true), 4, D0, 29, { side: false, mirror: false },
-    { mode: "stand", expr: "shock", blink: lidAt(t, 600, [35]), wave: flashed ? undefined : 0.5 + 0.25 * Math.sin(t * 2.4), look: 0 }, {}));
+    { mode: "stand", expr: "shock", blink: lidAt(t, 600, [35]), wave: flashed ? undefined : 0.5 + 0.25 * Math.sin(t * 2.4), look: 0, tilt: flashed ? 0 : breathe(t, 600) }, {}));
   blob(out, 4, D0, 29);
-  for (const [i, x] of [[0, 2.5], [1, 7]] as const) {
+  for (const [i, x] of [[0, 3], [1, 6.5]] as const) {
     out.places.push(person(cam, colleague(i), x, D0, 28.5, { side: false, mirror: false },
-      { mode: "stand", expr: flashed ? "shock" : i ? "nervous" : "neutral", blink: lidAt(t, i + 645, [35]), look: 0 }, {}));
+      { mode: "stand", expr: flashed ? "shock" : i ? "nervous" : "alert", blink: lidAt(t, i + 645, [35]), look: 0, tilt: flashed ? 0 : breathe(t, i + 645) }, {}));
     blob(out, x, D0, 28.5);
   }
   blast(out, -8, 18, 10, t, 34.8);
@@ -434,7 +472,7 @@ const ruin2Crowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, yamaguchi(false), 8, D0, z, view, fo, so));
   blob(out, 8, D0, z);
   out.places.push(person(cam, supervisor, 6, D0, z - 2, { side: false, mirror: false },
-    { mode: "stand", expr: "dazed", blink: lidAt(t, 630), look: 0 }, {}));
+    { mode: "stand", expr: "dazed", blink: lidAt(t, 630), look: 0, tilt: breathe(t, 630) }, {}));
   blob(out, 6, D0, z - 2);
   out.places.push(person(cam, colleague(0), 5, D0, z - 1, { side: false, mirror: false },
     { mode: "stroll", phase: (t * 0.4 + 0.3) % 1, expr: "dazed", blink: lidAt(t, 645), look: 0 }, {}));
@@ -445,24 +483,52 @@ const ruin2Crowd = (t: number, cam: CamInfo, out: Stage) => {
  *  recognition certificate from an official in front of the civic hall, a small crowd watching.
  *  They stand EAST of the hall front (x=-10), on the street side — never inside the hall. */
 const honorCrowd = (t: number, cam: CamInfo, out: Stage) => {
-  // the official hands over the certificate: a white paper card with a red seal
-  out.places.push(person(cam, official, -5, D0, 31, { side: false, mirror: false },
-    { mode: "stand", expr: "neutral", blink: lidAt(t, 650), look: 0 }, {}));
-  blob(out, -5, D0, 31);
-  out.places.push(person(cam, oldYamaguchi, -7.5, D0, 31, { side: false, mirror: false },
-    { mode: "stand", expr: "relief", blink: lidAt(t, 640), look: 0 }, {}));
-  blob(out, -7.5, D0, 31);
-  // the certificate, held between them at chest height
+  // the official hands over the certificate: a white paper card with a red seal.
+  // Perbaikan 3 (still2_1395): menumpang kartu di torso SAJA TIDAK CUKUP — di
+  // still2_1395 kartu tetap melayang karena kedua tangan menggantung di sisi badan,
+  // jauh di bawah kartu. Kali ini (a) kedua pria dirapatkan (jarak pusat 1,0 -> 0,7 m:
+  // pejabat -5,75 -> -5,9, Yamaguchi tua -6,75 -> -6,6) dan kartu dilebarkan
+  // (0,72 -> 0,78 m), dan (b) TANGAN DIGAMBAR DI KARTU ITU SENDIRI: lengan + telapak
+  // tangan pejabat (jaket navy #2f3a5c, kulit #ffe2c2) memegang tepi kiri kartu dan
+  // lengan + telapak tangan Yamaguchi tua (jaket #5a6a7a, kulit #f5c9a0) memegang
+  // tepi kanan kartu, setinggi dada. Lengan keluar melewati tepi kartu ke arah torso
+  // masing-masing, jadi tangan, kartu, dan torso bersentuhan di gambar — bukan posisi
+  // 3D saja, tapi benar-benar tergambar menyentuh.
+  out.places.push(person(cam, official, -5.9, D0, 31, { side: false, mirror: false },
+    { mode: "stand", expr: "alert", blink: lidAt(t, 650), look: 0, tilt: breathe(t, 650) }, {}));
+  blob(out, -5.9, D0, 31);
+  out.places.push(person(cam, oldYamaguchi, -6.6, D0, 31, { side: false, mirror: false },
+    { mode: "stand", expr: "relief", blink: lidAt(t, 640), look: 0, tilt: breathe(t, 640) }, {}));
+  blob(out, -6.6, D0, 31);
+  // the certificate, held between them at chest height — with both men's hands
+  // gripping its edges (drawn on the card itself, see note above)
   out.fx.push({ key: "certificate", cw: 300, ch: 400, draw: (p) => {
+    // arms reaching in from each side first (behind the card, so the hands overlap it)
+    p.poly([[-8, 188], [46, 188], [46, 216], [-8, 216]], "#2f3a5c", 6); // official's navy sleeve, left
+    p.poly([[254, 188], [308, 188], [308, 216], [254, 216]], "#5a6a7a", 6); // old Yamaguchi's sleeve, right
     p.poly([[40, 60], [260, 60], [260, 340], [40, 340]], "#f7f3ea", 8);
     p.stroke([[70, 120], [230, 120]], 6, "#8a8f96"); p.stroke([[70, 160], [230, 160]], 6, "#8a8f96");
     p.stroke([[70, 200], [200, 200]], 6, "#8a8f96"); p.stroke([[70, 240], [210, 240]], 6, "#8a8f96");
     p.dot(210, 300, 16, "#c0353a");
-  }, x: -6.25, y: 1.3, z: 31, w: 0.5, h: 0.66 });
+    // the official's hand ON the card face, just right of his torso's edge: the card
+    // is drawn behind the characters (fx renderOrder 0 < actors 1), so a hand at the
+    // card's left EDGE is hidden behind the official's torso — the first attempt at
+    // canvas x 90 showed only a 12x20 px sliver (pixel-diff vs the previous still).
+    // At canvas x 115 the hand sits fully right of his torso edge (screen x ~723,
+    // torso edge ~702) on the paper itself, with a navy sleeve band reaching in from
+    // behind his torso — so BOTH men are visibly holding the certificate, not just
+    // old Yamaguchi on the right edge.
+    p.poly([[48, 194], [115, 194], [115, 212], [48, 212]], "#2f3a5c", 6);
+    p.ell(115, 202, 16, 14, "#ffe2c2", 6); p.stroke([[115, 192], [115, 212]], 5, "#241726");
+    // hands gripping the card edges, on top of the card: skin circles straddling each
+    // edge at chest height, with a thumb line over the paper
+    p.ell(40, 202, 17, 15, "#ffe2c2", 6); p.stroke([[40, 192], [40, 212]], 5, "#241726");
+    p.ell(260, 202, 17, 15, "#f5c9a0", 6); p.stroke([[260, 192], [260, 212]], 5, "#241726");
+  }, x: -6.25, y: 1.12, z: 31, w: 0.78, h: 0.98, rot: -0.08 });
   // the small crowd: two colleagues and a clerk, respectful, watching
   for (const [i, x] of [[0, -2.5], [1, -4]] as const) {
     out.places.push(person(cam, colleague(i + 2), x, D0, i ? 28.5 : 30, { side: false, mirror: false },
-      { mode: "stand", expr: "smile", blink: lidAt(t, i + 655), look: 0 }, {}));
+      { mode: "stand", expr: "smile", blink: lidAt(t, i + 655), look: 0, tilt: breathe(t, i + 655) }, {}));
     blob(out, x, D0, i ? 28.5 : 30);
   }
 };
@@ -471,7 +537,7 @@ const honorCrowd = (t: number, cam: CamInfo, out: Stage) => {
  *  looking out over the rebuilt city at sunset. */
 const hillsCrowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, oldYamaguchi, 0, 0, 66, { side: false, mirror: false },
-    { mode: "stand", expr: "relief", blink: lidAt(t, 640), look: 0 }, {}));
+    { mode: "stand", expr: "relief", blink: lidAt(t, 640), look: 0, tilt: breathe(t, 640) }, {}));
   blob(out, 0, 0, 66);
 };
 

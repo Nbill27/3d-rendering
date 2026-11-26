@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { staticFile } from "remotion";
 import { Batch, boxGeo, V, lam, house, prop, Kit, kitClone } from "./build";
-import { ctex, beam, stoneHD, grassHD, cobbleHD, dirtHD, cloudHD } from "./paint";
+import { ctex, beam, stoneHD, grassHD, cobbleHD, dirtHD, cloudHD, darkWood, stepStone, awningRib } from "./paint";
 import { Pen } from "./toon";
 import { LIGHTS, LOOK, LightPreset } from "./lights";
 import { TONE, CHAR, untone } from "./shade";
@@ -73,6 +73,7 @@ export class World {
   private cloudMaps: Record<"day" | "golden", THREE.Texture[]>;
   private fgs: { o: THREE.Object3D; a: number; b: number }[] = [];
   private clouds: THREE.Mesh[] = [];
+  private cloudBase: { a: number; d: number; y: number }[] = [];
   private frustum = new THREE.Frustum();
   private m4 = new THREE.Matrix4(); private v = new THREE.Vector3(); private sph = new THREE.Sphere();
   private hiroIntact = new THREE.Group();
@@ -117,6 +118,7 @@ export class World {
       const w = 120 + (i % 4) * 25;
       m.position.set(Math.cos(a) * d, 28 + (i % 4) * 6, Math.sin(a) * d); m.scale.set(w, w / 2, 1);
       m.layers.set(NOINK);
+      this.cloudBase.push({ a, d, y: 28 + (i % 4) * 6 }); // Tahap 5: sudut dasar untuk drift awan
       this.clouds.push(m); R.add(m);
     }
 
@@ -128,9 +130,33 @@ export class World {
     M.mud = lam("mud", () => ({ map: dirtHD(), color: "#6a5138" }));
     M.stone = lam("stoneHD", () => ({ map: stoneHD() }));
     M.wood = lam("wood", () => ({ map: beam() }));
-    M.dark = lam("darkWood", () => ({ color: "#5a3b2a" }));
+    M.dark = lam("darkWood", () => ({ map: darkWood() })); // Hairline T4: grain, was flat #5a3b2a
+    M.step = lam("stepStone", () => ({ map: stepStone() })); // Hairline T4: 2 stone courses sized for a 0.12 m step face
     M.steel = lam("steel", () => ({ color: "#5a5f6a" }));
     M.hill = lam("hillGrass", () => ({ map: grassHD(), color: "#7ab35a" }));
+    M.vegG = lam("produceGreen", () => ({ color: "#5aa83c" }));
+    M.vegO = lam("produceOrange", () => ({ color: "#e07b2c" }));
+    M.vegR = lam("produceRed", () => ({ color: "#c0353a" }));
+    M.paper = lam("paperWarm", () => ({ color: "#f7e8c0" }));
+    /** code-built paper lantern on a post (the Kenney lantern GLB 404s, so the
+     *  prop() calls below never rendered anything): post + warm paper box. */
+    const codeLantern = (b: Batch, x: number, z: number) => {
+      b.add(boxGeo(V(x - 0.07, 0, z - 0.07), V(x + 0.07, 2.2, z + 0.07), 0), M.dark);
+      b.add(boxGeo(V(x - 0.05, 2.2, z - 0.05), V(x + 0.05, 2.32, z + 0.05), 0), M.dark);
+      b.add(boxGeo(V(x - 0.18, 1.78, z - 0.18), V(x + 0.18, 2.2, z + 0.18), 0), M.paper);
+      b.add(boxGeo(V(x - 0.19, 1.74, z - 0.19), V(x + 0.19, 1.8, z + 0.19), 0), M.vegR);
+      b.add(boxGeo(V(x - 0.19, 2.18, z - 0.19), V(x + 0.19, 2.24, z + 0.19), 0), M.vegR);
+    };
+    /** office front porch (anatomy: office.html): stone step, dark recessed doorway,
+     *  dark signboard above it, and a sloped awning on the wall — no posts, so nobody
+     *  standing in the yard clips through one. frontX = the office front wall's x. */
+    const officePorch = (b: Batch, frontX: number, oz: number) => {
+      b.add(boxGeo(V(frontX - 1.5, 0, oz - 0.8), V(frontX, 0.12, oz + 0.8), 0), M.step); // step (Hairline T4: stone courses)
+      b.add(boxGeo(V(frontX - 0.06, 0.3, oz - 0.8), V(frontX + 0.05, 2.2, oz + 0.8), 0), M.dark); // doorway recess
+      b.add(boxGeo(V(frontX - 0.15, 3.1, oz - 1.2), V(frontX + 0.02, 3.8, oz + 1.2), 0), M.dark); // signboard
+      const awn = new THREE.Matrix4().makeRotationZ(-0.2).setPosition(frontX, 2.75, oz);
+      b.add(boxGeo(V(-1.5, 0, -1.9), V(0, 0.08, 1.9), 0), lam("awningRibRed", () => ({ map: awningRib("#b4524b") })), awn); // Hairline T4: canvas ribs
+    };
     b.add(quadAt(-900, 900, -900, 900, 0, 225, 225), M.grass);
     b.add(quadAt(-3, 3, -60, 62, 0.012, 1.2, 24), M.cobble); // the main street
     b.add(quadAt(3, 20, -36, -24, 0.012, 3, 2), M.dirt); // Hiroshima office yard
@@ -162,6 +188,14 @@ export class World {
       hill.position.set(x, -2, z); hill.scale.set(sx, sy, sz); hill.receiveShadow = true;
       R.add(hill);
     }
+    // Tahap 6: trees at the foot of the bare hills (code VEG, so they render — the GLB
+    // trees 404). The northern row breaks the flat green hill behind shots 1-4; the
+    // southern pair frames the rebuilt-city view in shot 10. Planted on flat ground at
+    // the hill foot (z -62 / +74), never on the dome itself (bases would sink).
+    for (const [n, x, z, h] of [["tree_oak", -32, -62, 10], ["tree_default", -18, -63, 11], ["tree_fat", -6, -62, 9],
+      ["tree-high-round", 8, -63, 11], ["tree_default", 22, -62, 10], ["tree_oak", 34, -63, 9],
+      ["tree_default", -16, 74, 9], ["tree_oak", 16, 75, 8]] as const)
+      prop(b, kit, n, x, 0, z, h, x);
     b.build(R);
 
     // ---- Hiroshima intact: Mitsubishi office, station, wooden houses ----
@@ -191,8 +225,8 @@ export class World {
     // returns null for them) — these read as a market stall, a hand cart and a crate stack in
     // the flat toon style instead. All clear of Yamaguchi's path (x=0) and of the colleagues.
     // Kept SMALL: at this camera distance a 2 m prop next to the lens fills half the frame.
-    const awningRed = lam("awningRed", () => ({ color: "#b4524b" }));
-    const awningCream = lam("awningCream", () => ({ color: "#e8d9b0" }));
+    const awningRed = lam("awningRibRed", () => ({ map: awningRib("#b4524b") })); // Hairline T4: canvas ribs
+    const awningCream = lam("awningRibCream", () => ({ map: awningRib("#e8d9b0") })); // Hairline T4: canvas ribs
     { // market stall at (-4.2, -28): four posts, counter, striped awning, goods crates
       const sx = -4.2, sz = -28;
       for (const [dx, dz] of [[-0.75, -0.5], [0.75, -0.5], [-0.75, 0.5], [0.75, 0.5]] as const)
@@ -204,7 +238,23 @@ export class World {
       hi.add(boxGeo(V(0, 0, -0.85), V(0.9, 0.08, 0.85), 0), awningCream, awn);
       hi.add(boxGeo(V(sx - 0.7, 0.92, sz - 0.3), V(sx - 0.3, 1.2, sz + 0.1), 0), M.wood); // goods crates
       hi.add(boxGeo(V(sx + 0.3, 0.92, sz - 0.1), V(sx + 0.7, 1.15, sz + 0.3), 0), M.wood);
+      // produce piled on the crates, so the stall reads as a market stall, not an empty frame
+      hi.add(boxGeo(V(sx - 0.65, 1.2, sz - 0.25), V(sx - 0.35, 1.38, sz + 0.05), 0), M.vegG); // greens
+      hi.add(boxGeo(V(sx + 0.35, 1.15, sz - 0.05), V(sx + 0.65, 1.32, sz + 0.25), 0), M.vegO); // oranges
+      hi.add(boxGeo(V(sx - 0.15, 0.92, sz + 0.2), V(sx + 0.15, 1.1, sz + 0.5), 0), M.vegR); // red goods
+      // basket stack beside the stall
+      hi.add(boxGeo(V(sx + 1.05, 0, sz + 0.35), V(sx + 1.45, 0.35, sz + 0.75), 0), M.wood);
+      hi.add(boxGeo(V(sx + 1.08, 0.35, sz + 0.38), V(sx + 1.42, 0.6, sz + 0.72), 0), M.vegG);
+      // paper lantern hanging from the awning front
+      hi.add(boxGeo(V(sx - 0.02, 2.0, sz + 0.78), V(sx + 0.02, 2.3, sz + 0.82), 0), M.dark);
+      hi.add(boxGeo(V(sx - 0.16, 1.68, sz + 0.7), V(sx + 0.16, 2.0, sz + 0.9), 0), M.paper);
     }
+    // office porch (anatomy: office.html) + code-built street lanterns (the GLB
+    // lantern prop() calls below 404, so nothing rendered there before)
+    officePorch(hi, 9.5, -30);
+    codeLantern(hi, 4.8, -20); codeLantern(hi, -4.8, -12); codeLantern(hi, 4.8, 2);
+    for (const [x, z] of [[-6, -14], [7, -2]] as const)
+      prop(hi, kit, "plant_bush", x, 0, z, 1.6 + hr() * 0.8, hr() * 6);
     // NOTE: a hand cart and a near-camera crate stack were tried here and removed again:
     // at this camera distance both loomed far too large (the cart merged with the stall into
     // one mass, the crates read as a giant monolith in the corner). The stall + pedestrians
@@ -227,7 +277,7 @@ export class World {
       if (Math.hypot(x - 14, z - 30) < 11 || Math.hypot(x + 14, z - 32) < 11) continue; // office + hall
       prop(ni, kit, trees[Math.floor(hr() * trees.length)], x, 0, z, 7 + hr() * 4, hr() * 6);
     }
-    for (const [x, z] of [[-6, 22], [7, 40], [-6, 48], [7, 26], [-14, 38], [16, 36]] as const)
+    for (const [x, z] of [[-6, 22], [7, 40], [-6, 48], [9.5, 24.5], [-14, 38], [16, 36]] as const)
       prop(ni, kit, "plant_bush", x, 0, z, 1.6 + hr() * 0.8, hr() * 6);
     prop(ni, kit, "lantern", 11, 0, 33, 1.6, 0);
     prop(ni, kit, "lantern", -11, 0, 29, 1.6, 0);
@@ -235,6 +285,29 @@ export class World {
     // so no tree looms directly behind older Yamaguchi against the sunset
     for (const [x, z] of [[-18, 66], [12, 68], [-30, 72], [26, 70], [18, 74], [-16, 78]] as const)
       prop(ni, kit, "tree_default", x, 0, z, 8 + hr() * 3, hr() * 6);
+    // office porch + street lanterns (Nagasaki end) + extra bushes
+    officePorch(ni, 10, 30);
+    // Tahap 6: codeLantern(ni, 4.8, 26) DIHAPUS — tiangnya berdiri tepat di antara kamera
+    // S6 dan supervisor (6, 30), jadi kotak kertasnya menutupi separuh wajah supervisor
+    // di still2_900. Lampion yang tersisa (-4.8, 20) dan (-4.8, 38) tidak menghalangi grup.
+    codeLantern(ni, -4.8, 20); codeLantern(ni, -4.8, 38);
+    // Tahap 6: the rebuilt city below the hill (shot 10) — a small cluster of houses on
+    // the southern slope, facing north toward the hill camera, so the closing shot shows
+    // a lived-in town instead of empty colour bands. Kept clear of x=0 (Yamaguchi's axis)
+    // and of the S9 cameras' sight lines (50 m south of the hall, out of the S9 frame).
+    house(ni, -6, 74, Math.PI, 8, 7, 6, 2);
+    house(ni, -1, 78, Math.PI, 9, 7, 7, 4);
+    house(ni, 4, 75, Math.PI, 7, 6, 5, 1);
+    house(ni, 8, 79, Math.PI, 8, 7, 6, 6);
+    for (const [x, z] of [[7, 16], [-6, 56]] as const)
+      prop(ni, kit, "plant_bush", x, 0, z, 1.6 + hr() * 0.8, hr() * 6);
+    // civic hall (S9): stone step, signboard, and a flagpole with a white flag
+    // and red disc, so the hall reads as a Japanese civic building, not a house
+    ni.add(boxGeo(V(-11.5, 0, 30.5), V(-10, 0.12, 33.5), 0), M.step); // hall step (Hairline T4: stone courses)
+    ni.add(boxGeo(V(-10.15, 3.1, 30.8), V(-9.98, 3.8, 33.2), 0), M.dark);
+    ni.add(boxGeo(V(-11.54, 0, 25.96), V(-11.46, 5, 26.04), 0), M.dark); // flagpole
+    ni.add(boxGeo(V(-11.46, 4.2, 25.98), V(-10.56, 4.8, 26.02), 0), M.paper); // flag
+    ni.add(boxGeo(V(-11.1, 4.35, 25.97), V(-10.85, 4.65, 26.03), 0), M.vegR); // red disc
     ni.build(this.nagaIntact);
     R.add(this.nagaIntact);
 
@@ -364,6 +437,11 @@ export class World {
     }
     for (let i = 0; i < this.clouds.length; i++) {
       const m = this.clouds[i], mat = m.material as THREE.MeshBasicMaterial;
+      // Tahap 5 (motion_design): awan hanyut pelan (lapisan ambient, ~0,1 rad selama 60 dtk)
+      // supaya langit tidak pernah jadi backdrop beku; counter-motion terhadap gerak
+      // kamera utara/selatan, kecepatannya ~5% dari gerak hero.
+      const cb = this.cloudBase[i], ca = cb.a + t * 0.0016;
+      m.position.set(Math.cos(ca) * cb.d, cb.y, Math.sin(ca) * cb.d);
       m.lookAt(cam.position.x, m.position.y, cam.position.z);
       mat.map = this.cloudMaps[s.light][i % 4];
     }
