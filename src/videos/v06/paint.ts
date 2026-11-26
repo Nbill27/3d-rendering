@@ -339,6 +339,65 @@ export const beamHD = () => ctex("beamHD", 1024, 512, (g, r) => {
   }
 });
 
+// ---------------- Hairline Tahap 4 (Yamaguchi): line textures for flat-colour props ----------------
+/** Dark wood grain for M.dark (stall posts, counter base, lantern/telegraph poles, porch
+ *  recess + signboard, flagpole): the old flat #5a3b2a read as a solid silhouette. Grain
+ *  runs along x; boxGeo maps the whole texture per face, so posts get long vertical grain
+ *  only if the face is tall — the strokes are drawn both ways below to cover that. */
+export const darkWood = () => ctex("darkWood", 512, 512, (g, r) => {
+  const S = 512;
+  g.fillStyle = "#5a3b2a"; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 16; i++) { // long grain along x
+    const light = r() < 0.3;
+    grain(g, r, S, U(r, 0, S), U(r, 0, S), U(r, 300, 512), U(r, 1.5, 5), U(r, 1.5, 3),
+      light ? "rgba(150,104,66,0.28)" : "rgba(46,26,14,0.35)");
+  }
+  for (let i = 0; i < 10; i++) { // a few vertical grain strokes, so tall narrow faces read too
+    const x = U(r, 0, S), y0 = U(r, 0, S / 2), len = U(r, 120, 300);
+    g.strokeStyle = "rgba(46,26,14,0.3)"; g.lineWidth = U(r, 1.5, 3); g.lineCap = "round";
+    g.beginPath(); g.moveTo(x, y0); g.quadraticCurveTo(x + U(r, -6, 6), y0 + len / 2, x, y0 + len); g.stroke();
+  }
+  for (let i = 0; i < 3; i++) { // butt joints
+    const y = U(r, 40, S - 40);
+    g.fillStyle = "#3d2417"; g.fillRect(0, y, S, 3);
+    g.fillStyle = "rgba(200,160,120,0.25)"; g.fillRect(0, y + 3, S, 2);
+  }
+  for (const nx of [96, 256, 416]) for (const ny of [96, 256, 416]) nail(g, nx + U(r, -4, 4), ny + U(r, -4, 4), 5, "#2e1a10");
+});
+
+/** Stone courses for a low step: boxGeo maps the whole texture onto each face, so the
+ *  full stoneHD (8 courses) would squash to mush on a 0.12 m-high step face. Two courses
+ *  with one staggered vertical joint each, plus a sunlit top lip, read as stone at that size. */
+export const stepStone = () => ctex("stepStone", 512, 256, (g, r) => {
+  const W = 512, H = 256;
+  g.fillStyle = "#8a7a63"; g.fillRect(0, 0, W, H); // mortar
+  for (const [y, off] of [[0, 0], [128, 170]] as const) {
+    g.fillStyle = jit(r, pick(r, ["#cbbfa6", "#bdb197", "#d4c8ae"]), 0.08, 4, 0.12);
+    g.fillRect(4, y + 4, W - 8, 120);
+    g.fillStyle = "rgba(255,252,245,0.22)"; g.fillRect(4, y + 4, W - 8, 6); // top bevel
+    g.fillStyle = "rgba(70,55,45,0.16)"; g.fillRect(4, y + 118, W - 8, 6); // bottom shade
+    g.fillStyle = "#8a7a63"; g.fillRect((off % W) - 3, y, 6, 128); // staggered vertical joint
+    g.fillRect(((off + 256) % W) - 3, y, 6, 128);
+  }
+  for (let i = 0; i < 60; i++) { // speckles
+    g.fillStyle = r() < 0.6 ? "rgba(95,82,72,0.35)" : "rgba(255,255,255,0.3)";
+    g.beginPath(); g.arc(U(r, 0, W), U(r, 0, H), U(r, 1, 2.5), 0, TAU); g.fill();
+  }
+});
+
+/** Awning ribs: vertical seams + highlight per rib, so the porch awning and the stall
+ *  awning read as sewn canvas strips instead of flat red/cream slabs. */
+export const awningRib = (col: string) => ctex("awningRib" + col, 512, 512, (g, r) => {
+  const S = 512;
+  g.fillStyle = col; g.fillRect(0, 0, S, S);
+  for (let x = 0; x < S; x += 64) {
+    g.fillStyle = "rgba(40,20,15,0.28)"; g.fillRect(x, 0, 5, S); // seam
+    g.fillStyle = "rgba(255,240,220,0.20)"; g.fillRect(x + 5, 0, 3, S); // lit rib edge
+    g.fillStyle = `rgba(255,255,255,${U(r, 0.02, 0.06)})`; g.fillRect(x + 8, 0, 56, S); // per-strip tone
+  }
+  for (let i = 0; i < 8; i++) blotch(g, U(r, 0, S), U(r, 0, S), U(r, 40, 110), 1.5, "70,50,30", 0.06); // wear
+});
+
 /** Ashlar courses, 1024 px per tile: with boxGeo tile 2 (towers) courses are 0.25 m at 512 texels/m; with the 4 m
  *  quad tile (quay walls) 0.5 m blocks. Ref: blocks #c2b2a5 / #cdbdb0 (C* 5-12), mortar dL* -14..-20 and only
  *  2.8-3.6 px wide at 1080p (ours #503f26, 5.4 px, yellow C* 18), top bevel +5 L*, bottom -3 L*, 2-4 px speckles,

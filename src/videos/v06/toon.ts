@@ -254,13 +254,19 @@ export const thickAngle = (light: number) => Math.atan2(-Math.sin(light) + 0.8, 
 const DEF_LIGHT = rad(-120);
 
 // ---------------- faces ----------------
-export type Expr = "neutral" | "stern" | "grin" | "laugh" | "whistle" | "nervous" | "shock" | "relief" | "relief_open" | "dazed"
+export type Expr = "neutral" | "alert" | "stern" | "grin" | "laugh" | "whistle" | "nervous" | "shock" | "relief" | "relief_open" | "dazed"
   | "pained" | "smile" | "smile_closed" | "lick";
 type EyeK = "dot" | "small" | "lid" | "slit" | "happy" | "dash" | "squeeze" | "shock" | "shockHalf" | "spiral";
 type MouthK = "dash" | "frown" | "smirk" | "smile" | "smileWide" | "grin" | "laugh" | "o" | "O" | "wave" | "teeth" | "lick";
 /** eyes [back, front], brows [inner, outer] offsets in u (+ = down), mouth kind */
 const FACE: Record<Expr, { eye: [EyeK, EyeK]; brow: [number, number]; mouth: MouthK }> = {
   neutral: { eye: ["lid", "lid"], brow: [0, -1], mouth: "dash" },
+  // Tahap 5 (motion_design): "alert" menggantikan "neutral" untuk Yamaguchi dan rekan-rekannya
+  // di adegan pagi/seremonial (S1, S2, S6, S9) — neutral bermata "lid" (setengah tertutup) yang
+  // terbaca mengantuk di still_60. "alert": mata "dot" terbuka penuh, alis sedikit terangkat,
+  // mulut "dash" tertutup (bergegas/fokus, bukan senyum). "neutral" sendiri TIDAK diubah:
+  // dipakai video lain yang berbagi toon.ts ini.
+  alert: { eye: ["dot", "dot"], brow: [-3, -2], mouth: "dash" },
   stern: { eye: ["lid", "lid"], brow: [3, -2], mouth: "frown" },
   grin: { eye: ["happy", "happy"], brow: [-3, -3], mouth: "grin" },
   laugh: { eye: ["squeeze", "squeeze"], brow: [-4, -4], mouth: "laugh" },
@@ -873,8 +879,9 @@ export const fxSplash = (p: Pen, t: number) => {
 
 /** dust puff on a 300 x 300 canvas; t in 0..1 */
 export const fxPuff = (p: Pen, t: number) => {
+  const e = 1 - (1 - t) ** 3; // Tahap 5: mengembang ease-out (cepat lalu mengendap), bukan linear
   for (let i = 0; i < 5; i++) {
-    const a = rad(160 + i * 55), d = 40 + 70 * t, r = (34 + 20 * (i % 2)) * (1 - 0.6 * t);
+    const a = rad(160 + i * 55), d = 40 + 70 * e, r = (34 + 20 * (i % 2)) * (1 - 0.6 * e);
     p.ell(150 + d * Math.cos(a), 180 + d * 0.45 * Math.sin(a), r, r * 0.8, `rgba(238,225,205,${(1 - t).toFixed(3)})`, 0);
   }
 };
@@ -903,8 +910,9 @@ export const fxRing = (p: Pen, t: number) => {
   // thin light water rings (white crest, pale blue trailing rings), thinning as they spread
   const g = p.g;
   for (let k = 0; k < 3; k++) {
-    const u = t - k * 0.22;
-    if (u <= 0 || u >= 1) continue;
+    const raw = t - k * 0.22;
+    if (raw <= 0 || raw >= 1) continue;
+    const u = 1 - (1 - raw) ** 3; // Tahap 5: menyebar ease-out (cepat lalu mengendap), bukan linear
     g.beginPath(); g.ellipse(300, 300, 60 + 230 * u, 60 + 230 * u, 0, 0, Math.PI * 2);
     g.strokeStyle = k === 0 ? "#f6fcff" : "#cfe8fa"; g.lineWidth = 9 * (1 - u) + 3; g.stroke();
   }
@@ -1117,12 +1125,17 @@ export const fxBlob = (p: Pen, col: string) => {
   g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
 };
 
-/** 1940s Japanese passenger train carriage, side view facing right, on a 600 x 400 canvas
+/** 1940s Japanese passenger train, side view facing right, on an 800 x 400 canvas
  *  (wheels bottom at y = 400); phase 0..1 turns the wheel spokes. flip mirrors it.
- *  Dark green carriage, light windows, open door in the middle, roof arc, two bogies. */
+ *  Locomotive + tender + one carriage (anatomy: train.html). The locomotive leads:
+ *  cowcatcher, smokebox, chimney, steam dome, cab, three driving wheels with a
+ *  connecting rod; the tender carries coal; the carriage has lit windows, an open
+ *  door in the middle with a step and a header lamp, roof vents and two bogies.
+ *  Drawn front-right so that with flip=true (the video's view) the locomotive
+ *  leads on screen-left, the direction of travel (south). */
 export const fxTrain = (p: Pen, phase: number, flip = false) => {
   const g = p.g, GREEN = "#2f4a3a", DARK = "#223626", ROOF = "#3a3d47";
-  if (flip) { g.save(); g.translate(600, 0); g.scale(-1, 1); }
+  if (flip) { g.save(); g.translate(800, 0); g.scale(-1, 1); }
   const wheel = (cx: number, cy: number, r: number) => {
     g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.strokeStyle = INK; g.lineWidth = 12; g.stroke();
     g.beginPath(); g.arc(cx, cy, r - 10, 0, Math.PI * 2); g.strokeStyle = "#c9ccd2"; g.lineWidth = 4; g.stroke();
@@ -1133,19 +1146,50 @@ export const fxTrain = (p: Pen, phase: number, flip = false) => {
     }
     g.beginPath(); g.arc(cx, cy, 9, 0, Math.PI * 2); g.fillStyle = INK; g.fill();
   };
-  // roof arc
-  p.ell(300, 128, 268, 34, ROOF, 8);
-  // carriage body
-  p.poly(rrect(36, 132, 564, 308, 10), GREEN, 9);
-  p.line([[36, 168], [564, 168]], DARK, 4);
-  p.line([[36, 280], [564, 280]], DARK, 4);
-  // windows: four lit windows, one dark (open) door in the middle
-  for (const x of [80, 150, 390, 460] as const) p.poly(rrect(x, 188, x + 56, 252, 6), "#bfe3f2", 7);
-  p.poly(rrect(272, 180, 328, 308, 4), DARK, 8); // open door
-  p.poly(rrect(272, 180, 328, 200, 4), "#e8c45a", 5); // door header lamp
-  // underframe + bogies
-  p.poly(rrect(60, 308, 540, 330, 6), DARK, 8);
-  wheel(140, 348, 34); wheel(210, 348, 34); wheel(390, 348, 34); wheel(460, 348, 34);
+  // ---- carriage (left): body, roof, lit windows, open door, bogies ----
+  p.ell(248, 128, 220, 34, ROOF, 8); // roof arc
+  p.poly(rrect(36, 132, 460, 308, 10), GREEN, 9); // carriage body
+  p.line([[36, 168], [460, 168]], DARK, 4);
+  p.line([[36, 280], [460, 280]], DARK, 4);
+  for (const x of [70, 130, 190, 250, 340] as const) p.poly(rrect(x, 188, x + 56, 252, 6), "#bfe3f2", 7); // lit windows
+  p.poly(rrect(296, 180, 330, 308, 4), DARK, 8); // open door
+  p.poly(rrect(296, 180, 330, 200, 4), "#e8c45a", 5); // door header lamp
+  p.poly(rrect(60, 308, 460, 330, 6), DARK, 8); // underframe
+  for (let x = 70; x <= 450; x += 32) p.dot(x, 319, 2.5, "#c9ccd2"); // Hairline T4: underframe rivets
+  wheel(110, 348, 30); wheel(170, 348, 30); wheel(400, 348, 30); wheel(440, 348, 30);
+  // roof vents
+  p.ell(150, 118, 14, 8, "#5a5f6a", 6); p.ell(380, 118, 14, 8, "#5a5f6a", 6);
+  // ---- tender (middle): coal load, water hatch ----
+  p.poly(rrect(470, 170, 560, 308, 8), GREEN, 9);
+  p.poly(rrect(470, 170, 560, 190, 6), "#1c1c26", 6); // coal heap
+  for (let x = 480; x <= 550; x += 14) { p.dot(x, 200, 2.5, "#1c1c26"); p.dot(x, 298, 2.5, "#1c1c26"); } // Hairline T4: tender rivets
+  p.poly(rrect(500, 158, 530, 172, 4), "#5a5f6a", 5); // water hatch
+  p.poly(rrect(470, 308, 560, 330, 6), DARK, 8);
+  wheel(495, 348, 26); wheel(535, 348, 26);
+  // ---- locomotive (right): cab, boiler, smokebox, chimney, cowcatcher ----
+  p.poly(rrect(570, 150, 640, 308, 8), GREEN, 9); // cab
+  p.poly(rrect(588, 168, 622, 216, 6), "#bfe3f2", 7); // cab window
+  p.poly(rrect(566, 138, 644, 152, 6), ROOF, 7); // cab roof
+  p.ell(690, 196, 52, 52, GREEN, 9); // boiler barrel (round front)
+  p.poly(rrect(640, 150, 740, 244, 8), GREEN, 9); // boiler
+  p.line([[640, 196], [740, 196]], DARK, 4);
+  // Hairline T4: boiler rivet rows along the top and bottom seams
+  for (let x = 650; x <= 730; x += 16) { p.dot(x, 160, 3, "#1c1c26"); p.dot(x, 234, 3, "#1c1c26"); }
+  p.poly(rrect(740, 150, 772, 244, 8), DARK, 9); // smokebox
+  for (let y = 162; y <= 232; y += 14) p.dot(766, y, 3, "#8a8f96"); // Hairline T4: smokebox front rivets
+  p.poly(rrect(748, 96, 766, 150, 6), "#3a3d47", 8); // chimney
+  p.ell(757, 94, 16, 7, "#223626", 6); // chimney rim
+  p.ell(688, 138, 20, 14, "#3f5a4a", 7); // steam dome
+  p.ell(716, 140, 15, 11, "#3f5a4a", 7); // sand dome
+  p.ell(778, 232, 10, 10, "#ffd84a", 6); // headlamp
+  p.poly([[772, 308], [800, 308], [772, 384]], "#8a5a3a", 8); // cowcatcher
+  p.poly(rrect(772, 300, 800, 314, 4), "#c0353a", 7); // buffer beam
+  // driving wheels + connecting rod + crosshead (the running gear that moves)
+  wheel(610, 348, 34); wheel(670, 348, 34); wheel(730, 348, 34);
+  const crank = phase * Math.PI * 2;
+  p.line([[640, 340], [730 + 26 * Math.cos(crank), 348 + 26 * Math.sin(crank)]], "#c9ccd2", 7); // connecting rod
+  p.dot(730 + 26 * Math.cos(crank), 348 + 26 * Math.sin(crank), 7, INK); // crank pin
+  p.poly(rrect(636, 332, 656, 350, 4), "#8a8f96", 6); // crosshead
   if (flip) g.restore();
 };
 
@@ -1153,28 +1197,81 @@ export const fxTrain = (p: Pen, phase: number, flip = false) => {
  *  A tall grey column of overlapping lobes under a wide billowing cap, darker at the base.
  *  Drawn soft (thin outlines) so it reads as smoke in the sky, not a solid object. */
 export const fxMushroom = (p: Pen, t: number) => {
-  const e = 0.6 + 0.4 * t;
+  const e = 0.6 + 0.4 * (1 - (1 - t) ** 3); // Tahap 5: tumbuh ease-out, berat dan tertahan (tanpa overshoot)
   const LOBE = "#cfc8bd", MID = "#b5aca0", DARK = "#8d8578";
+  // Tahap 6: outline 5 -> 2 supaya lobe-lobe menyatu jadi satu awan, bukan untaian
+  // manik-manik; stem lebih bervariasi di x supaya kolomnya tidak terbaca sebagai tali.
   // stem: stacked lobes rising from the base, narrowing toward the cap
-  const stem: [number, number, number][] = [[300, 560, 70], [290, 480, 62], [308, 400, 58], [296, 330, 52], [304, 270, 48]];
-  for (const [x, y, r] of stem) p.ell(x, y, r * e, r * 0.9 * e, MID, 5);
-  p.ell(300, 560, 78 * e, 40 * e, DARK, 5);
+  const stem: [number, number, number][] = [[300, 560, 74], [284, 478, 68], [312, 398, 64], [290, 328, 58], [306, 268, 52]];
+  for (const [x, y, r] of stem) p.ell(x, y, r * e, r * 0.9 * e, MID, 2);
+  p.ell(300, 560, 82 * e, 42 * e, DARK, 2);
   // cap: wide billowing cloud of overlapping round lobes
   const cap: [number, number, number][] = [[180, 220, 78], [250, 170, 92], [330, 150, 100], [410, 180, 88], [460, 230, 66], [300, 210, 96], [370, 240, 70], [230, 240, 68]];
-  for (const [x, y, r] of cap) p.ell(x, y, r * e, r * 0.85 * e, LOBE, 5);
+  for (const [x, y, r] of cap) p.ell(x, y, r * e, r * 0.85 * e, LOBE, 2);
   // shadowed underside of the cap
   p.ell(300, 268, 150 * e, 34 * e, MID, 0);
 };
 
 /** dark smoke column on a 300 x 600 canvas (base at y = 600); t in 0..1 rises and thins.
- *  Stacked grey puffs, darkest at the base, fading to pale at the top. */
+ *  ONE continuous organic plume, never stacked discs: the silhouette is a single wavy
+ *  vertical path filled with one vertical gradient (dark base -> pale top), so there is
+ *  no horizontal boundary anywhere in the column. Texture comes only from a few large,
+ *  very soft radial lobes at low alpha that feather to transparent — they can never read
+ *  as separate coins, because each one fades out completely inside the plume.
+ *  (Perbaikan 3, still2_555 / still2_1185: the old 8 solid-centre puffs, each 70% opaque
+ *  to 0.7 of its radius, read as a stack of grey discs even with radial gradients.) */
 export const fxSmoke = (p: Pen, t: number) => {
-  const puffs: [number, number, number, string][] = [
-    [150, 560, 66, "#5a5348"], [132, 480, 58, "#6a6258"], [168, 410, 62, "#7a7268"],
-    [142, 330, 56, "#8a8278"], [162, 250, 50, "#9a9288"], [148, 170, 44, "#aaa29a"], [158, 100, 36, "#bcb4ac"],
+  const g = p.g;
+  const e = 1 - (1 - t) ** 3; // Tahap 5: naik ease-out (cepat lalu mengendap), bukan linear
+  const drift = 10 * Math.sin(t * 6.28);
+  const cy = (y: number) => y - e * 50;
+  // silhouette: wavy sides, wide dark base, narrower pale top, slight lean with drift.
+  // The waviness is LARGE (bulges ~30% of the half-width) so the column never reads as
+  // a straight pillar: a smoke plume is lumpy on every scale, not a slab.
+  const wAt = (y: number) => { // half-width of the plume at canvas y
+    const u = (600 - y) / 600; // 0 base -> 1 top
+    return 82 - 26 * u + 24 * Math.sin(u * 7.5 + 1.2) + 12 * Math.sin(u * 17 + 0.4) + 10 * Math.sin(u * 3.1 + 2.0);
+  };
+  const cx = 150 + drift * 0.4;
+  g.save();
+  g.beginPath();
+  g.moveTo(cx - wAt(600), cy(600));
+  for (let y = 600; y >= 40; y -= 20) g.lineTo(cx - wAt(y) + drift * ((600 - y) / 600), cy(y));
+  g.lineTo(cx + 10, cy(28)); // rounded top
+  for (let y = 40; y <= 600; y += 20) g.lineTo(cx + wAt(y) + drift * ((600 - y) / 600), cy(y));
+  g.closePath();
+  const lg = g.createLinearGradient(0, cy(600), 0, cy(30));
+  lg.addColorStop(0, "rgba(74,68,60,0.82)");
+  lg.addColorStop(0.35, "rgba(96,90,82,0.78)");
+  lg.addColorStop(0.7, "rgba(138,130,120,0.72)");
+  lg.addColorStop(1, "rgba(178,170,162,0.62)");
+  g.fillStyle = lg; g.fill();
+  // soft lobes BREAKING OUT of the silhouette on both sides, so the edge itself is
+  // lumpy instead of a clean line: large, very low alpha, fully feathered.
+  const edgeLobes: [number, number, number, string, number][] = [
+    [cx - wAt(480) - 18, 480, 62, "96,90,82", 0.16], [cx + wAt(400) + 14, 400, 58, "110,104,96", 0.15],
+    [cx - wAt(300) - 12, 300, 55, "120,112,104", 0.14], [cx + wAt(210) + 16, 210, 52, "138,130,120", 0.13],
+    [cx - wAt(120) - 10, 120, 48, "150,142,134", 0.12],
   ];
-  for (const [x, y, r, c] of puffs) {
-    const yy = y - t * 60, rr = r * (1 + 0.25 * t);
-    p.ell(x, yy, rr, rr * 0.9, c, 4);
+  for (const [x, y, r, c, a] of edgeLobes) {
+    const gr = g.createRadialGradient(x, cy(y), 0, x, cy(y), r);
+    gr.addColorStop(0, `rgba(${c},${a})`);
+    gr.addColorStop(0.6, `rgba(${c},${(a * 0.45).toFixed(3)})`);
+    gr.addColorStop(1, `rgba(${c},0)`);
+    g.fillStyle = gr; g.fillRect(x - r, cy(y) - r, r * 2, r * 2);
   }
+  // soft internal shading only: large lobes, low alpha, fully feathered (alpha 0 at r)
+  const lobes: [number, number, number, string, number][] = [
+    [132, 520, 95, "58,54,48", 0.28], [172, 430, 100, "58,54,48", 0.22],
+    [140, 330, 90, "120,112,104", 0.20], [168, 240, 85, "140,132,124", 0.18],
+    [150, 150, 75, "160,152,144", 0.16], [158, 70, 60, "170,162,154", 0.14],
+  ];
+  for (const [x, y, r, c, a] of lobes) {
+    const gr = g.createRadialGradient(x, cy(y), 0, x, cy(y), r);
+    gr.addColorStop(0, `rgba(${c},${a})`);
+    gr.addColorStop(0.6, `rgba(${c},${(a * 0.45).toFixed(3)})`);
+    gr.addColorStop(1, `rgba(${c},0)`);
+    g.fillStyle = gr; g.fillRect(x - r, cy(y) - r, r * 2, r * 2);
+  }
+  g.restore();
 };
