@@ -583,16 +583,19 @@ const ContactShadow: React.FC<{ x: number; y: number; scale?: number }> = ({ x, 
 
 /** Karaoke text: one phrase at a time, Poppins ExtraBold, white with thick
  *  black outline, single line, center-lower (60-75% of frame height).
- *  Font size auto-fits the phrase into ~1020 px (cap 170 px, floor 95 px)
- *  so long phrases stay on one line. */
+ *  Font size auto-fits the phrase into ~920 px (cap 46 px, floor 30 px)
+ *  so long phrases stay on one line. Size matches the burned-in captions
+ *  of the History Rush videos already on YouTube (Molasses, Video05:
+ *  46 px for normal captions, maxWidth 920) — set 2026-11-26 after bill
+ *  asked for the YouTube size. Was cap 170 / width 1000, then cap 120. */
 const fitFontSize = (phrase: string): number => {
   const est = phrase.length * 0.68; // conservative em-width of Poppins ExtraBold lowercase (wide letters like m/g/a)
-  return Math.max(90, Math.min(170, Math.floor(1000 / est)));
+  return Math.max(30, Math.min(46, Math.floor(920 / est)));
 };
 
 const KaraokeText: React.FC<{ phrase: string }> = ({ phrase }) => {
   const outline =
-    "0 7px 0 #111111, 7px 0 0 #111111, -7px 0 0 #111111, 0 -7px 0 #111111, 5px 5px 0 #111111, -5px 5px 0 #111111, 5px -5px 0 #111111, -5px -5px 0 #111111, 0 10px 20px rgba(0,0,0,0.35)";
+    "0 3px 0 #000000, 3px 0 0 #000000, -3px 0 0 #000000, 0 -3px 0 #000000, 2px 2px 0 #000000, -2px 2px 0 #000000, 2px -2px 0 #000000, -2px -2px 0 #000000, 0 6px 12px rgba(0,0,0,0.55)";
   return (
     <div
       style={{
