@@ -16,6 +16,7 @@ import { Video08 } from "./videos/v08/Video08";
 import { Video09 } from "./videos/v09/Video09";
 import { TobaTest } from "./videos/v10/TobaTest";
 import { TobaTestV2 } from "./videos/v11/TobaTestV2";
+import { Video14 } from "./videos/v14/Video14";
 
 export const MyComposition = () => {
   return (
@@ -152,6 +153,14 @@ export const MyComposition = () => {
         id="Video11"
         component={TobaTestV2}
         durationInFrames={1396}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="Video14"
+        component={Video14}
+        durationInFrames={1800}
         fps={30}
         width={1080}
         height={1920}
