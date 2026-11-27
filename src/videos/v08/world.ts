@@ -17,7 +17,7 @@ import { LIGHTS, LOOK, LightPreset } from "./lights";
 import { TONE, CHAR, untone } from "./shade";
 import { NOINK } from "./ink";
 import { Pool, Actor, Fx, stage } from "./cast";
-import { FPS, SHOTS, camAt, storyState, BARREL_BANK, PUMP_POS, STALL_POS, BANK_Y, ShotDef } from "./story";
+import { FPS, SHOTS, camAt, storyState, PUMP_POS, STALL_POS, BANK_Y, ShotDef, clamp01, pumpPose } from "./story";
 
 // ---------------- painted canvas textures ----------------
 /** sun disc (solid, soft rim) and the flat golden halo */
@@ -51,8 +51,9 @@ const fallsTex = () => ctex("fallsCurtain", 256, 512, (g, r) => {
   }
 });
 /** the barrel's oak staves with the painted lettering "Heroine of Niagara Falls",
- *  drawn twice (u 0.125 facing south-east, u 0.625 facing north-west) so it reads
- *  from the bank cameras and from the stall. */
+ *  drawn twice (u 0.25 and u 0.75) on the UPPER course, clear of the belly hoop,
+ *  so it reads from the bank cameras and from the stall. Two copies, not four:
+ *  four copies put a cut-off copy at the silhouette edge in every still (stage01). */
 const barrelTex = () => ctex("barrelSide", 512, 256, (g) => {
   g.fillStyle = "#a8763e"; g.fillRect(0, 0, 512, 256);
   for (let x = 0; x < 512; x += 32) {
@@ -60,13 +61,30 @@ const barrelTex = () => ctex("barrelSide", 512, 256, (g) => {
     g.fillStyle = "rgba(255,255,255,0.06)"; g.fillRect(x + 3, 0, 14, 256);
   }
   g.fillStyle = "rgba(0,0,0,0.25)"; g.fillRect(0, 0, 512, 10); g.fillRect(0, 246, 512, 10);
-  g.fillStyle = "#3a2a1a"; g.font = "bold 14px Arial, sans-serif"; g.textAlign = "center";
-  // four copies (one per quarter-turn) so a copy faces the camera from any angle;
-  // each is centred well inside the canvas — an off-canvas copy clips its left letters
-  for (const cx of [64, 192, 320, 448]) {
-    g.fillText("HEROINE OF", cx, 112);
-    g.fillText("NIAGARA FALLS", cx, 136);
-  }
+});
+/** the barrel's inscription on its own curved label (see below): it used to be baked
+ *  into barrelTex as two repeated copies, and whichever copy faced the camera was
+ *  always cut at the silhouette edge (stage01, 8 stills). One curved label,
+ *  centred on the bank-side face, reads whole from every bank-side angle and
+ *  simply turns away from the far side. */
+const letterTex = () => ctex("barrelLabel", 256, 128, (g) => {
+  g.clearRect(0, 0, 256, 128);
+  g.fillStyle = "#2a4a7a";
+  g.font = "bold 26px Arial, sans-serif";
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText("HEROINE OF", 128, 42);
+  g.fillText("NIAGARA FALLS", 128, 88);
+});
+/** a tiny "photograph" for the stall's photo cards: sky, falls, barrel, ground.
+ *  V1 used a flat blue-grey box, which read as an empty window (stage01, still_1590). */
+const photoTex = () => ctex("photoPrint", 128, 160, (g) => {
+  const gr = g.createLinearGradient(0, 0, 0, 160);
+  gr.addColorStop(0, "#a8d0ea"); gr.addColorStop(0.6, "#d8ecfa"); gr.addColorStop(1, "#8a7a5a");
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 160);
+  g.fillStyle = "#f4fbff"; g.fillRect(44, 30, 40, 70); // the falls curtain
+  g.fillStyle = "#7a5230"; g.fillRect(52, 108, 24, 30); // the barrel
+  g.fillStyle = "#3a3f46"; g.fillRect(50, 114, 28, 4); g.fillRect(50, 128, 28, 4); // its hoops
+  g.fillStyle = "#6a8a4a"; g.fillRect(0, 140, 128, 20); // ground
 });
 const SUN_SHOT: Record<number, { az?: number; el?: number }> = { 10: { az: 165, el: 22 } };
 
@@ -97,10 +115,13 @@ export class World {
   private frustum = new THREE.Frustum();
   private m4 = new THREE.Matrix4(); private v = new THREE.Vector3(); private sph = new THREE.Sphere();
   private riverTex: THREE.Texture;
+  private fallsTex: THREE.Texture;
   private barrel = new THREE.Group();
-  private barrelLid: THREE.Mesh; private barrelMattress: THREE.Mesh;
+  private barrelLid: THREE.Mesh; private barrelLidTop: THREE.Group; private barrelContents: THREE.Group;
   private boat = new THREE.Group();
   private pump = new THREE.Group();
+  private pumpHandle: THREE.Group; private pumpNeedle: THREE.Mesh;
+  private rapids: THREE.Mesh[] = []; private foamPulse: THREE.Mesh[] = [];
   private lidHeld = new THREE.Group();
   private lidGround = new THREE.Group();
 
@@ -153,7 +174,7 @@ export class World {
     M.wood = lam("wood", () => ({ map: beam() }));
     M.dark = lam("darkWood", () => ({ color: "#5a3b2a" }));
     M.hill = lam("hillGrass", () => ({ map: grassHD(), color: "#7ab35a" }));
-    M.foam = lam("foamWhite", () => ({ color: "#f4fbff" }));
+    M.foam = new THREE.MeshBasicMaterial({ color: "#ffffff" }); // foam stays white: the Lambert version rendered beige under the two-tone light and read as sandbars in the pool (v2 still_1070/1090)
     this.riverTex = water();
     this.riverTex.wrapS = this.riverTex.wrapT = THREE.RepeatWrapping;
     M.river = lam("riverWater", () => ({ map: this.riverTex }));
@@ -180,20 +201,34 @@ export class World {
     // water curtain on each face and foam at the base. The arc opens south: the centre
     // is the deepest (north-most) point, the wings curl toward the viewer. ----
     const falls = new Batch();
-    const curtainMat = lam("fallsCurtain", () => ({ map: fallsTex(), side: THREE.DoubleSide }));
+    this.fallsTex = fallsTex();
+    this.fallsTex.wrapS = this.fallsTex.wrapT = THREE.RepeatWrapping;
+    const curtainMat = lam("fallsCurtain", () => ({ map: this.fallsTex, side: THREE.DoubleSide }));
+    const streakMat = lam("fallsStreak", () => ({ color: "#ffffff", transparent: true, opacity: 0.45, side: THREE.DoubleSide }));
     const lipMat = lam("fallsLip", () => ({ color: "#eef8ff" }));
-    const cliffStone = lam("cliffStone", () => ({ map: stoneHD(), color: "#8a7a68" })); // wet rock, darker than dry stone
+    const cliffStoneTop = lam("cliffStoneTop", () => ({ map: stoneHD(), color: "#9a8a76" })); // dry rock at the top
+    const cliffStoneMid = lam("cliffStoneMid", () => ({ map: stoneHD(), color: "#8a7a68" }));
+    const cliffStoneBot = lam("cliffStoneBot", () => ({ map: stoneHD(), color: "#5f5142" })); // wet rock at the base
     for (const cx of [-13, -6.5, 0, 6.5, 13] as const) {
       const cz = -68 + (Math.abs(cx) / 16) ** 2 * 6; // arc: centre deepest
       const yaw = Math.atan((12 * cx) / 256); // tangent of the arc
       const m = new THREE.Matrix4().makeRotationY(yaw).setPosition(cx, 0, cz);
-      // cliff face: three stacked stone boxes so the face reads as rock, not one flat slab
-      falls.add(boxGeo(V(-3.9, 0, -1.3), V(3.9, 7, 1.3), 0), cliffStone, m);
-      falls.add(boxGeo(V(-3.7, 7, -1.1), V(3.7, 13.5, 1.1), 0), cliffStone, m);
-      falls.add(boxGeo(V(-3.5, 13.5, -0.9), V(3.5, 20, 0.9), 0), cliffStone, m);
-      // water curtain on the south face, from the lip down to the pool (as wide as the face)
+      // cliff face: three stacked stone boxes so the face reads as rock, not one flat slab;
+      // one colour per layer (dry top, wet dark base) so the layers read (anatomy)
+      falls.add(boxGeo(V(-3.9, 0, -1.3), V(3.9, 7, 1.3), 0), cliffStoneBot, m);
+      falls.add(boxGeo(V(-3.7, 7, -1.1), V(3.7, 13.5, 1.1), 0), cliffStoneMid, m);
+      falls.add(boxGeo(V(-3.5, 13.5, -0.9), V(3.5, 20, 0.9), 0), cliffStoneTop, m);
+      // water curtain on the south face, from the lip down to the pool; widened to 7.9
+      // so the dark stone behind no longer shows as hard black seams between segments
       const cm = new THREE.Matrix4().makeRotationY(yaw).setPosition(cx, 0, cz + 1.5);
-      falls.add(quad(V(-3.85, 0.4, 0), V(3.85, 0.4, 0), V(3.85, 19.6, 0), V(-3.85, 19.6, 0)), curtainMat, cm);
+      falls.add(quad(V(-3.95, 0.4, 0), V(3.95, 0.4, 0), V(3.95, 19.6, 0), V(-3.95, 19.6, 0)), curtainMat, cm);
+      // thin white streaks 0.15 in front of the curtain so the water reads as falling,
+      // not as flat glass panels (stage01)
+      for (const sx of [-2.2, 0.3, 2.4]) {
+        const sw = 0.5 + hr() * 0.4;
+        const sm = new THREE.Matrix4().makeRotationY(yaw).setPosition(cx, 0, cz + 1.65);
+        falls.add(quad(V(sx - sw / 2, 0.4, 0), V(sx + sw / 2, 0.4, 0), V(sx + sw / 2, 19.6, 0), V(sx - sw / 2, 19.6, 0)), streakMat, sm);
+      }
       // the lip: white water going over the top edge
       falls.add(boxGeo(V(-3.6, 19.6, -0.4), V(3.6, 20.1, 1.6), 0), lipMat, m);
     }
@@ -214,6 +249,23 @@ export class World {
     };
     rubble(-8, -60, 6); rubble(8, -60, 6); rubble(-14, -46, 5); rubble(12, -48, 4); rubble(-6, -54, 4);
     falls.build(R);
+
+    // rapids streaks on the river just above the falls + two pulsing foam patches
+    // at the pool edge (motion-tabel.md F): the river in v1 read as a flat blue canal.
+    // The foam is unlit white: a Lambert foam rendered beige under the two-tone
+    // light and read as sandbars in the pool (v2 still_1070/1090).
+    const foamMat = new THREE.MeshBasicMaterial({ color: "#ffffff" });
+    for (const [fx, fz] of [[-13, -63], [13, -63]] as const) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.12, 1.5), foamMat);
+      m.position.set(fx, 0.17, fz); m.layers.set(NOINK);
+      this.foamPulse.push(m); R.add(m);
+    }
+    const rapidMat = new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.55 });
+    for (let i = 0; i < 3; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.6), rapidMat);
+      m.rotation.x = -Math.PI / 2; m.layers.set(NOINK);
+      this.rapids.push(m); R.add(m);
+    }
 
     // ---- Goat Island trees (west bank) + bank and town trees and bushes ----
     // VEG names are built in code (addVeg); the empty kit is never touched for them.
@@ -240,26 +292,91 @@ export class World {
     town.build(R);
     this.buildStall(R);
 
-    // ---- the barrel (dynamic): oak body with the painted lettering, two iron hoops,
-    // a wooden lid (shown when closed) and a mattress disc (shown when open). ----
+    // ---- the barrel (dynamic): oak body with the painted lettering, THREE iron hoops,
+    // a wooden lid with fittings (shown when closed) and its contents (shown when open):
+    // a 3-layer mattress, the red heart pillow, and the anvil ballast. Anatomy + hairline. ----
     const oak = lam("barrelOak", () => ({ map: barrelTex() }));
     const iron = lam("ironHoop", () => ({ color: "#3a3f46" }));
     const lidMat = lam("barrelLid", () => ({ color: "#8a6a42" }));
     const mattMat = lam("mattress", () => ({ color: "#e8dcc0" }));
+    const mattMat2 = lam("mattress2", () => ({ color: "#ded2b0" }));
+    const corkMat = lam("cork", () => ({ color: "#d8c8a0" }));
+    const brassMat = lam("brass", () => ({ color: "#b08a3a" }));
+    const heartMat = lam("heartPillow", () => ({ color: "#c0353a" }));
+    const anvilMat = lam("anvil", () => ({ color: "#2a2d33" }));
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.42, 1.5, 24), oak);
     body.castShadow = true; body.receiveShadow = true;
     this.barrel.add(body);
-    for (const hy of [-0.55, 0.55]) {
+    // the inscription on a curved label hugging the barrel: a 1.4 rad segment
+    // centred on theta 0.35 (the bank-side cameras sit at theta 0.2-0.5), radius
+    // 0.46 (the body is 0.44-0.45 there), y 0.13-0.53, between the belly hoop
+    // and the top hoop so no hoop crosses the text
+    const label = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.46, 0.46, 0.4, 24, 1, true, -0.35, 1.4),
+      lam("barrelLabel", () => ({ map: letterTex(), transparent: true })),
+    );
+    label.position.y = 0.33;
+    this.barrel.add(label);
+    for (const hy of [-0.55, 0, 0.55]) {
       const hoop = new THREE.Mesh(new THREE.CylinderGeometry(0.47, 0.47, 0.12, 24), iron);
       hoop.position.y = hy; hoop.castShadow = true;
       this.barrel.add(hoop);
+      // two rivet bolts on the belly hoop, facing the bank cameras
+      if (hy === 0) for (const ba of [-0.5, 0.5]) {
+        const bolt = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), iron);
+        bolt.position.set(0.47 * Math.sin(ba), 0, 0.47 * Math.cos(ba));
+        this.barrel.add(bolt);
+      }
     }
     this.barrelLid = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.06, 24), lidMat);
     this.barrelLid.position.y = 0.78; this.barrelLid.castShadow = true;
     this.barrel.add(this.barrelLid);
-    this.barrelMattress = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.1, 24), mattMat);
-    this.barrelMattress.position.y = 0.72;
-    this.barrel.add(this.barrelMattress);
+    // lid fittings ride with the lid: knob, 4 screws, the cork and the brass air valve
+    // (the cork plugs the air hole after pumping, per SCRIPT.md)
+    this.barrelLidTop = new THREE.Group();
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.09, 12), lidMat);
+    knob.position.y = 0.86; knob.castShadow = true;
+    this.barrelLidTop.add(knob);
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2 + Math.PI / 4;
+      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.015, 8), iron);
+      screw.position.set(0.34 * Math.cos(a), 0.815, 0.34 * Math.sin(a));
+      this.barrelLidTop.add(screw);
+    }
+    const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 10), corkMat);
+    cork.position.set(0.22, 0.835, 0.1);
+    this.barrelLidTop.add(cork);
+    const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.06, 10), brassMat);
+    valve.position.set(-0.2, 0.84, -0.12);
+    this.barrelLidTop.add(valve);
+    this.barrel.add(this.barrelLidTop);
+    // contents, visible only while the barrel is open: 3 mattress layers, the red
+    // heart pillow on top, and the 5-part anvil ballast at the bottom
+    this.barrelContents = new THREE.Group();
+    for (const [my, mm] of [[0.6, mattMat], [0.66, mattMat2], [0.72, mattMat]] as const) {
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.055, 24), mm);
+      disc.position.y = my;
+      this.barrelContents.add(disc);
+    }
+    const heartShape = new THREE.Shape();
+    heartShape.moveTo(0, -0.09);
+    heartShape.bezierCurveTo(-0.11, -0.02, -0.09, 0.07, 0, 0.03);
+    heartShape.bezierCurveTo(0.09, 0.07, 0.11, -0.02, 0, -0.09);
+    const pillow = new THREE.Mesh(new THREE.ExtrudeGeometry(heartShape, { depth: 0.05, bevelEnabled: false }), heartMat);
+    pillow.rotation.x = -Math.PI / 2; pillow.position.set(0, 0.78, 0.05); pillow.castShadow = true;
+    this.barrelContents.add(pillow);
+    const anvilBox = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, rz = 0) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), anvilMat);
+      m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+      m.rotation.z = rz; m.castShadow = true;
+      this.barrelContents.add(m);
+    };
+    anvilBox(-0.15, 0.05, -0.09, 0.15, 0.13, 0.09); // base
+    anvilBox(-0.06, 0.13, -0.06, 0.06, 0.25, 0.06); // waist
+    anvilBox(-0.17, 0.25, -0.08, 0.17, 0.39, 0.08); // body
+    anvilBox(0.14, 0.32, -0.06, 0.3, 0.4, 0.06, -0.3); // horn
+    anvilBox(-0.28, 0.3, -0.07, -0.18, 0.4, 0.07); // heel
+    this.barrel.add(this.barrelContents);
     this.barrel.traverse((o) => { if (o instanceof THREE.Mesh) o.layers.set(NOINK); });
     R.add(this.barrel);
 
@@ -285,20 +402,72 @@ export class World {
     addBox(this.boat, boatDark, -0.62, 0.64, 0.6, 0.62, 0.68, 0.66); // oar 2
     R.add(this.boat);
 
-    // ---- the bicycle pump (dynamic visibility): steel tube, T-handle, hose to the barrel ----
+    // ---- the bicycle pump (dynamic visibility): steel tube, moving T-handle + piston rod,
+    // pressure gauge, and a 3-segment hose toward the barrel. Anatomy + motion-tabel E10. ----
     const pumpSteel = lam("pumpSteel", () => ({ color: "#6a6f7a" }));
     const pumpBase = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.2), pumpSteel);
     pumpBase.position.y = 0.02; pumpBase.castShadow = true; pumpBase.layers.set(NOINK);
     this.pump.add(pumpBase);
+    for (const px of [-0.12, 0.12]) {
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.03, 0.07), pumpSteel);
+      pad.position.set(px, 0.015, 0.13); pad.castShadow = true; pad.layers.set(NOINK);
+      this.pump.add(pad);
+    }
     const pumpTube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.55, 12), pumpSteel);
     pumpTube.position.y = 0.3; pumpTube.castShadow = true; pumpTube.layers.set(NOINK);
     this.pump.add(pumpTube);
-    const pumpHandle = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.04), boatDark);
-    pumpHandle.position.y = 0.6; pumpHandle.castShadow = true; pumpHandle.layers.set(NOINK);
-    this.pump.add(pumpHandle);
-    const pumpHose = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.6), boatDark);
-    pumpHose.position.set(-0.45, 0.03, 0.15); pumpHose.rotation.y = 2.1; pumpHose.layers.set(NOINK);
-    this.pump.add(pumpHose);
+    for (const cy of [0.08, 0.52]) {
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.04, 12), pumpSteel);
+      collar.position.y = cy; collar.castShadow = true; collar.layers.set(NOINK);
+      this.pump.add(collar);
+    }
+    // the moving handle group: T-bar + grips + piston rod sliding into the tube.
+    // Its y is driven every frame in update() by pumpPose() (36-frame stroke).
+    this.pumpHandle = new THREE.Group();
+    const handleBar = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.04), boatDark);
+    handleBar.castShadow = true; handleBar.layers.set(NOINK);
+    this.pumpHandle.add(handleBar);
+    for (const gx of [-0.15, 0.15]) {
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.05), boatDark);
+      grip.position.set(gx, 0, 0); grip.castShadow = true; grip.layers.set(NOINK);
+      this.pumpHandle.add(grip);
+    }
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 10), pumpSteel);
+    rod.position.y = -0.15; rod.layers.set(NOINK);
+    this.pumpHandle.add(rod);
+    this.pumpHandle.position.y = 0.6;
+    this.pump.add(this.pumpHandle);
+    // pressure gauge on the tube front (+z, toward the bank cameras): white face + red needle
+    const gaugeFace = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.02, 16),
+      new THREE.MeshBasicMaterial({ color: "#f7f3ea" }));
+    gaugeFace.rotation.x = Math.PI / 2; gaugeFace.position.set(0, 0.35, 0.06); gaugeFace.layers.set(NOINK);
+    this.pump.add(gaugeFace);
+    const needleGeo = new THREE.BoxGeometry(0.012, 0.07, 0.006);
+    needleGeo.translate(0, 0.035, 0); // pivot at the base, so rotation.z swings the tip
+    this.pumpNeedle = new THREE.Mesh(needleGeo, new THREE.MeshBasicMaterial({ color: "#c0353a" }));
+    this.pumpNeedle.position.set(0, 0.35, 0.075); this.pumpNeedle.rotation.z = -2; this.pumpNeedle.layers.set(NOINK);
+    this.pump.add(this.pumpNeedle);
+    // hose in 3 segments following the ground toward the barrel, with brass clamps
+    // at the joints and a nozzle at the end (v1 had one flat box that read as a loose board)
+    const hoseSeg = (x0: number, z0: number, x1: number, z1: number) => {
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, len), boatDark);
+      seg.position.set((x0 + x1) / 2, 0.03, (z0 + z1) / 2);
+      seg.rotation.y = Math.atan2(x1 - x0, z1 - z0);
+      seg.layers.set(NOINK);
+      this.pump.add(seg);
+    };
+    hoseSeg(0, 0.05, -0.5, -0.25);
+    hoseSeg(-0.5, -0.25, -1.0, -0.65);
+    hoseSeg(-1.0, -0.65, -1.5, -1.05);
+    for (const [jx, jz, jr] of [[-0.5, -0.25, 0.46], [-1.0, -0.65, 0.46]] as const) {
+      const clamp = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.03), brassMat);
+      clamp.position.set(jx, 0.03, jz); clamp.rotation.y = jr; clamp.layers.set(NOINK);
+      this.pump.add(clamp);
+    }
+    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.1, 10), brassMat);
+    nozzle.position.set(-1.5, 0.07, -1.05); nozzle.layers.set(NOINK);
+    this.pump.add(nozzle);
     this.pump.position.set(PUMP_POS[0], BANK_Y, PUMP_POS[2]);
     R.add(this.pump);
 
@@ -315,13 +484,16 @@ export class World {
       return g;
     };
     this.lidHeld = mkLid();
-    // held just above the barrel rim, close to Graham's raised hand
-    this.lidHeld.position.set(BARREL_BANK[0] + 0.5, BANK_Y + 1.6, BARREL_BANK[2] - 0.6);
+    // held up high by Graham's raised hand, visible above the barrel's right side;
+    // v2 put it at (3.5, 1.9, -18.9), off the right frame edge, so the lid was
+    // never seen until it sank into the barrel
+    this.lidHeld.position.set(3.1, BANK_Y + 2.05, -18.6);
     this.lidHeld.rotation.set(0.2, 0, 0.3);
     R.add(this.lidHeld);
     this.lidGround = mkLid();
-    // west of the barrel on the beach, clear of it so it shows in the rescue frame
-    this.lidGround.position.set(2.0, BANK_Y + 0.05, -57);
+    // west of the barrel on the beach, clear of it so it shows in the rescue frame;
+    // v1 put it at (2.0, -57), where it read as a cut-off yellow disc at the frame edge
+    this.lidGround.position.set(2.6, BANK_Y + 0.05, -56.8);
     this.lidGround.rotation.set(0, 0.4, 0.12);
     R.add(this.lidGround);
   }
@@ -349,10 +521,10 @@ export class World {
     // four white photo cards on the board's NORTH face (toward the camera at z 23);
     // the board tilts rx -0.35 so its top leans toward the camera: the face's z is
     // -0.41 at y 1.75 and -0.23 at y 1.25 (0.02 in front of the face in each row)
-    // each card carries a muted blue-grey "photo print" on its camera-facing side
+    // each card carries a tiny "photo print" on its camera-facing side
     // (0.017 further out, 0.012 thick, so no coplanar faces) so the cards read as
     // photographs instead of blank paper
-    const photo = new THREE.MeshBasicMaterial({ color: "#7a8a9a" });
+    const photo = new THREE.MeshBasicMaterial({ map: photoTex() });
     for (const [cx, cy, cz] of [[-0.25, 1.75, -0.41], [0.25, 1.75, -0.41], [-0.25, 1.25, -0.23], [0.25, 1.25, -0.23]] as const) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.02), white);
       m.position.set(cx, cy, cz); m.rotation.x = -0.35; m.castShadow = true; m.layers.set(NOINK);
@@ -403,15 +575,41 @@ export class World {
     this.barrel.position.set(st.barrel.x, st.barrel.y, st.barrel.z);
     this.barrel.rotation.set(st.barrel.rotX, st.barrel.yaw, st.barrel.rotZ);
     this.barrelLid.visible = st.barrel.closed;
-    this.barrelMattress.visible = st.barrel.mattress;
+    this.barrelLidTop.visible = st.barrel.closed;
+    this.barrelContents.visible = st.barrel.mattress;
     this.boat.visible = st.boat.visible;
     this.boat.position.set(st.boat.x, st.boat.y, st.boat.z);
     this.boat.rotation.y = st.boat.yaw;
     this.pump.visible = st.pump;
+    if (st.pump && id === 6 && t < 30) {
+      const pose = pumpPose(f); // 36-frame stroke, synced with the friend's arm in cast.ts
+      this.pumpHandle.position.y = 0.35 + 0.25 * pose;
+      this.pumpNeedle.rotation.z = -2 + 2.4 * pose;
+    } else {
+      this.pumpHandle.position.y = 0.6;
+      this.pumpNeedle.rotation.z = -2;
+    }
     this.lidHeld.visible = st.lidHeld;
+    if (id === 5) {
+      // the lid lowers onto the rim f780-810 (motion-tabel.md B): from Graham's
+      // raised hand (2.35) down to the rim (BANK_Y + 1.56 = 1.86), ease-in quad,
+      // ending flat on the rim. V2 ended at BANK_Y + 0.83, 0.7 m below the rim,
+      // so the lid sank inside the barrel and vanished mid-animation.
+      const u = clamp01((t - 26) / 1), e = u * u;
+      this.lidHeld.position.set(3.1 - 0.6 * e, BANK_Y + 2.05 - 0.49 * e, -18.6 + 0.6 * e);
+      this.lidHeld.rotation.set(0.2 * (1 - e), 0, 0.3 * (1 - e));
+    }
     this.lidGround.visible = st.lidGround;
-    // the river flows north: scroll its texture with story time (deterministic per frame)
-    this.riverTex.offset.y = -t * 0.012;
+    // the river flows north: scroll its texture with story time (deterministic per frame),
+    // with a small sine modulation so it does not read as a conveyor belt (motion E12)
+    this.riverTex.offset.y = -t * 0.012 + 0.002 * Math.sin(t * 1.1);
+    this.fallsTex.offset.y = -t * 0.05; // the curtain water flows down
+    // rapids streaks drift north on the river above the falls, wrapping every 8 m
+    for (let i = 0; i < this.rapids.length; i++)
+      this.rapids[i].position.set(-8 + i * 4, 0.14, -44 - ((t * 2 + i * 2.7) % 8));
+    // foam breathes at the pool during the drift and the drop (motion-tabel.md F)
+    const pulse = id >= 6 && id <= 8 ? 1 + 0.08 * Math.sin(((f - 900) / 48) * Math.PI * 2) : 1;
+    for (const m of this.foamPulse) m.scale.set(pulse, 1, pulse);
     // ---- light rig: camera-relative sun frozen per shot, two-tone uniforms, shadow fit ----
     const K = LOOK[s.light], sunDir = this.shotSun(id, s, L);
     this.hemi.color.set(L.sky); this.hemi.groundColor.set(L.ground); this.hemi.intensity = L.hemiI;
