@@ -1,0 +1,130 @@
+name: Render Blocky Ronaldo
+
+# Renders all 13404 frames of the VideoBlockyRonaldo composition in 15 parallel
+# jobs (bill's instruction 2026-11-27: 15 mesin paralel untuk mempercepat render).
+# 13404 = 446.784 s (measured mix.wav) x 30 fps.
+# 13404 / 15 = 893.6, so jobs 0-8 render 894 frames and jobs 9-14 render 893:
+# 9 x 894 + 6 x 893 = 8046 + 5358 = 13404.
+# NOTE: this is NOT the 15 jobs x 120 frames pattern — that is only for 60 s videos.
+# Each job uploads its chunk mp4 as an artifact; the artifacts are concatenated
+# and muxed with audio/mix.wav locally afterwards (WITHOUT -shortest).
+# No frames are rendered locally for this video.
+#
+# Trigger manually from the Actions tab (workflow_dispatch).
+# DRAFT — do not trigger until bill approves the stills (Langkah 4).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - job: 0
+            start: 0
+            end: 893
+            expected: 894
+          - job: 1
+            start: 894
+            end: 1787
+            expected: 894
+          - job: 2
+            start: 1788
+            end: 2681
+            expected: 894
+          - job: 3
+            start: 2682
+            end: 3575
+            expected: 894
+          - job: 4
+            start: 3576
+            end: 4469
+            expected: 894
+          - job: 5
+            start: 4470
+            end: 5363
+            expected: 894
+          - job: 6
+            start: 5364
+            end: 6257
+            expected: 894
+          - job: 7
+            start: 6258
+            end: 7151
+            expected: 894
+          - job: 8
+            start: 7152
+            end: 8045
+            expected: 894
+          - job: 9
+            start: 8046
+            end: 8938
+            expected: 893
+          - job: 10
+            start: 8939
+            end: 9831
+            expected: 893
+          - job: 11
+            start: 9832
+            end: 10724
+            expected: 893
+          - job: 12
+            start: 10725
+            end: 11617
+            expected: 893
+          - job: 13
+            start: 11618
+            end: 12510
+            expected: 893
+          - job: 14
+            start: 12511
+            end: 13403
+            expected: 893
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install ffmpeg (needed for the ffprobe verification step)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Ensure Chrome Headless Shell
+        run: npx remotion browser ensure
+
+      - name: Render frames ${{ matrix.start }}-${{ matrix.end }}
+        run: >
+          npx remotion render VideoBlockyRonaldo
+          blocky-ronaldo-chunk-${{ matrix.job }}.mp4
+          --frames=${{ matrix.start }}-${{ matrix.end }}
+          --concurrency=1
+          --timeout=300000
+
+      - name: Verify chunk (must be exactly ${{ matrix.expected }} frames, 1080x1920)
+        run: |
+          FRAMES=$(ffprobe -v error -count_frames -select_streams v:0 \
+            -show_entries stream=nb_read_frames -of csv=p=0 \
+            blocky-ronaldo-chunk-${{ matrix.job }}.mp4)
+          echo "frames=$FRAMES"
+          test "$FRAMES" = "${{ matrix.expected }}"
+          ffprobe -v error -select_streams v:0 \
+            -show_entries stream=width,height -of csv=p=0 \
+            blocky-ronaldo-chunk-${{ matrix.job }}.mp4
+
+      - name: Upload chunk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blocky-ronaldo-chunk-${{ matrix.job }}
+          path: blocky-ronaldo-chunk-${{ matrix.job }}.mp4
+          retention-days: 7
