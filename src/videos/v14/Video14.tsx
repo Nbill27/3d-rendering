@@ -68,14 +68,6 @@ type Expr = "amazed" | "stern" | "worried" | "shock" | "star" | "smile" | "conte
  *  sudah diganti ke celana wol + bot kerja 1871 seperti semua karakter). */
 type Outfit = "a" | "b" | "c";
 
-/** ease-out-back Playful (overshoot ~10%): untuk transisi gerak karakter. */
-const easeOutBack = (t: number): number => {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
-  const u = Math.min(1, Math.max(0, t));
-  return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2);
-};
-
 /** Bintang 4 ujung (mata bintang, toon.ts fxStars / Fafnir). */
 const starPath = (cx: number, cy: number, ro = 16, ri = 6.5): string =>
   `M ${cx} ${cy - ro} L ${cx + ri * 0.7} ${cy - ri * 0.7} L ${cx + ro} ${cy} ` +
@@ -114,26 +106,31 @@ const BeanHead: React.FC<{
   town = 1,
 }) => {
   const uid = useId().replace(/:/g, "");
-  // Walk: march in place — kaki mengayun KELUAR bergantian, tidak pernah
-  // menyilang (ayunan simetris +/- membentuk X yang terbaca kusut).
-  // Di SVG rotate(+) = searah jarum jam: kaki kiri rotate(-) = kaki ke kiri.
-  // Ayunan di-EASE selama 6 frame pertama tiap langkah (200 ms, Playful
-  // 150-300 ms) dengan ease-out-back (overshoot ~10%), lalu TAHAN — bukan
-  // snap instan. swing 1 = kaki kiri keluar.
+  // Gait tampak depan (koreksi bill 27 Nov 15:27 WIB): karakter menghadap
+  // kamera, jadi kaki KANAN lalu KIRI bergantian MENGANGKAT KE ATAS
+  // (vertikal) — satu kaki terangkat sementara satunya menapak, lalu
+  // bertukar. Kode lama memutar kedua kaki ±16 derajat di bidang layar
+  // (gunting simetris kiri-kanan) sehingga terbaca goyang/dansa.
+  // Satu langkah = 12 frame: kaki naik lalu mendarat dalam langkah itu
+  // (sinus penuh: 0 di awal/akhir langkah, maks di tengah langkah).
   const walking = pose === "walk";
   const stepIdx = Math.floor(local / 12);
   const stepT = (local % 12) / 12;
-  const swingAmt = easeOutBack(Math.min(1, stepT * 2));
-  const swing = stepIdx % 2 === 0 ? swingAmt : 1 - swingAmt;
-  const legL = walking ? -16 * swing : 0;
-  const legR = walking ? 16 * (1 - swing) : 0;
+  const liftPhase = Math.sin(stepT * Math.PI);
+  const LIFT = 20; // px satuan komponen (sebelum scale) — jelas tapi wajar
+  const leftLifting = stepIdx % 2 === 0; // langkah genap: kaki kiri naik
+  const liftL = walking && leftLifting ? LIFT * liftPhase : 0;
+  const liftR = walking && !leftLifting ? LIFT * liftPhase : 0;
   // Bob berdiri DIHAPUS (koreksi bill 27 Nov 14:21 WIB): bob idle
   // Math.sin(local * 0.09) * 4 membuat semua karakter berdiri naik-turun
   // SERENTAK ~7-8px di layar (skala 1.8-2.0, periode ~2,3 detik), terbaca
   // seperti joget di detik 5-10. Karakter berdiri sekarang benar-benar
   // diam (bob = 0); bob jalan hanya untuk pose "walk".
   const bob = walking ? -Math.abs(Math.sin(local * 0.26)) * 12 : 0;
-  const armSwing = walking ? 14 - 28 * swing : 0;
+  // Lengan berlawanan dengan kaki (lengan kiri naik saat kaki kanan naik),
+  // kecil saja (6px), translateY — bukan putaran gunting.
+  const armLiftL = walking && !leftLifting ? 6 * liftPhase : 0;
+  const armLiftR = walking && leftLifting ? 6 * liftPhase : 0;
   // Blink: mata menutup ~4 frame tiap ~90 frame.
   const blink = local % 90 < 4;
   // Mulut bicara: oval gelap KECIL (rx 10), bukan oval merah besar.
@@ -348,13 +345,13 @@ const BeanHead: React.FC<{
             biru + sneakers putih DIHAPUS (paten rivet Levi's baru 1873). */}
         {outfit ? (
           <>
-            <g transform={`rotate(${legL} 160 378)`}>
+            <g transform={`translate(0 ${-liftL})`}>
               <line x1={160} y1={378} x2={157} y2={492} stroke={WOOL_TROUSER_DARK} strokeWidth={18} strokeLinecap="round" />
               <line x1={160} y1={378} x2={157} y2={492} stroke={WOOL_TROUSER} strokeWidth={13} strokeLinecap="round" />
               <rect x={136} y={484} width={44} height={20} rx={7} fill={BOOT} stroke={INK} strokeWidth={3.5} />
               <line x1={138} y1={501} x2={178} y2={501} stroke={INK} strokeWidth={2} opacity={0.5} />
             </g>
-            <g transform={`rotate(${legR} 200 378)`}>
+            <g transform={`translate(0 ${-liftR})`}>
               <line x1={200} y1={378} x2={203} y2={492} stroke={WOOL_TROUSER_DARK} strokeWidth={18} strokeLinecap="round" />
               <line x1={200} y1={378} x2={203} y2={492} stroke={WOOL_TROUSER} strokeWidth={13} strokeLinecap="round" />
               <rect x={182} y={484} width={44} height={20} rx={7} fill={BOOT} stroke={INK} strokeWidth={3.5} />
@@ -363,12 +360,12 @@ const BeanHead: React.FC<{
           </>
         ) : (
           <>
-            <g transform={`rotate(${legL} 160 378)`}>
+            <g transform={`translate(0 ${-liftL})`}>
               <line x1={160} y1={378} x2={157} y2={490} stroke={WOOL_TROUSER_DARK} strokeWidth={14} strokeLinecap="round" />
               <line x1={160} y1={378} x2={157} y2={490} stroke={WOOL_TROUSER} strokeWidth={10} strokeLinecap="round" />
               <rect x={138} y={484} width={40} height={18} rx={7} fill={BOOT} stroke={INK} strokeWidth={3.5} />
             </g>
-            <g transform={`rotate(${legR} 200 378)`}>
+            <g transform={`translate(0 ${-liftR})`}>
               <line x1={200} y1={378} x2={203} y2={490} stroke={WOOL_TROUSER_DARK} strokeWidth={14} strokeLinecap="round" />
               <line x1={200} y1={378} x2={203} y2={490} stroke={WOOL_TROUSER} strokeWidth={10} strokeLinecap="round" />
               <rect x={184} y={484} width={40} height={18} rx={7} fill={BOOT} stroke={INK} strokeWidth={3.5} />
@@ -521,11 +518,11 @@ const BeanHead: React.FC<{
         )}
 
         {/* lengan: stroke tipis gelap + tangan titik tinta */}
-        <g transform={`rotate(${armSwing} 115 228)`}>
+        <g transform={`translate(0 ${-armLiftL})`}>
           <path d={armLPath} fill="none" stroke={INK} strokeWidth={8} strokeLinecap="round" />
           <circle cx={armLHand[0]} cy={armLHand[1]} r={6.5} fill={INK} />
         </g>
-        <g transform={`rotate(${-armSwing} 245 228)`}>
+        <g transform={`translate(0 ${-armLiftR})`}>
           <path d={armRPath} fill="none" stroke={INK} strokeWidth={8} strokeLinecap="round" />
           <circle cx={armRHand[0]} cy={armRHand[1]} r={6.5} fill={INK} />
         </g>
@@ -1078,25 +1075,36 @@ const Scene1: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
   </AbsoluteFill>
 );
 
-const Scene2: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
-  <AbsoluteFill>
-    {/* Tiga warga BERJAJAR, kepala tidak saling menutup: pusat kepala
-        252 / 594 / 936 (jarak 342px, lebar kepala ~275px) sehingga celah
-        antar kepala 77px (kiri-tengah) dan 97px (tengah-kanan); kepala
-        kanan berakhir x=1054 < 1080, tidak terpotong tepi. Kaki sejajar
-        ~y1240-1260 (garis tanah sama). */}
-    <ContactShadow x={0} y={560} scale={1.4} />
-    {/* pose "walk" diganti "stand" (koreksi bill 27 Nov 14:21 WIB): x
-        karakter TETAP (tidak berpindah), jadi siklus jalan hanya
-        berbaris di tempat + memantul, terbaca seperti joget di detik
-        6-10. Mereka memang berdiri berjajar, bukan berjalan. */}
-    <BeanHead x={0} y={560} scale={1.4} kind="town" town={1} shirt="#8a6a42" pose="stand" expr="smile" speaking={speaking} local={local} />
-    <ContactShadow x={360} y={600} scale={1.3} />
-    <BeanHead x={360} y={600} scale={1.3} kind="elder" pose="stand" expr="content" speaking={speaking} local={local} />
-    <ContactShadow x={720} y={640} scale={1.2} />
-    <BeanHead x={720} y={640} scale={1.2} kind="town" town={3} shirt="#8a3a2e" pose="stand" expr="smile" speaking={speaking} local={local} />
-  </AbsoluteFill>
-);
+const Scene2: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => {
+  // Tiga warga BERJALAN KE DEPAN (ke arah kamera), bukan berdiri diam:
+  // pose "walk" (siklus kaki 12 frame/langkah, sudah ada di BeanHead)
+  // + y dan scale naik LINEAR terhadap local (jalan kaki kecepatannya
+  // konstan, jadi linear di sini benar). S2 = frasa baris 2 karaoke,
+  // frame global 167-307 (bukan 173-318: 313 sudah masuk S3 karena gap
+  // 307-318 memakai baris berikutnya), jadi local 0..140. x tetap. Kaki awal ~y1240-1260, maju ~130-170px
+  // dan tetap di atas caption. ContactShadow ikut y dan scale yang
+  // sama supaya bayangan tidak lepas dari kaki.
+  // PENYIMPANGAN ANGKA (terukur): scale akhir Warga 3 dibatasi 1,28
+  // (bukan 1,41): pada 1,41 tepi kanan kepala = 720 + 278*1,41 = 1112
+  // > 1080, kepala terpotong ~32px oleh tepi frame. Pada 1,28 tepi
+  // kanan = ~1076, aman di dalam frame; kaki tetap maju 1240 -> 1410.
+  const y1 = interpolate(local, [0, 140], [560, 690]);
+  const s1 = interpolate(local, [0, 140], [1.4, 1.65]);
+  const yE = interpolate(local, [0, 140], [600, 730]);
+  const sE = interpolate(local, [0, 140], [1.3, 1.53]);
+  const y3 = interpolate(local, [0, 140], [640, 770]);
+  const s3 = interpolate(local, [0, 140], [1.2, 1.28]);
+  return (
+    <AbsoluteFill>
+      <ContactShadow x={0} y={y1} scale={s1} />
+      <BeanHead x={0} y={y1} scale={s1} kind="town" town={1} shirt="#8a6a42" pose="walk" expr="smile" speaking={speaking} local={local} />
+      <ContactShadow x={360} y={yE} scale={sE} />
+      <BeanHead x={360} y={yE} scale={sE} kind="elder" pose="walk" expr="content" speaking={speaking} local={local} />
+      <ContactShadow x={720} y={y3} scale={s3} />
+      <BeanHead x={720} y={y3} scale={s3} kind="town" town={3} shirt="#8a3a2e" pose="walk" expr="smile" speaking={speaking} local={local} />
+    </AbsoluteFill>
+  );
+};
 
 const Scene3: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
   <AbsoluteFill>
@@ -1205,7 +1213,11 @@ export const Video14: React.FC = () => {
   // Very slow zoom-in, tiny pan, over the whole scene. Ease-in-out sine
   // (bukan linear — aturan motion_design: gerakan spasial tidak linear).
   const zoom = interpolate(local, [0, len], [1, 1.02], { easing: Easing.inOut(Easing.sin) });
-  const panX = interpolate(local, [0, len], [0, -6], { easing: Easing.inOut(Easing.sin) });
+  // panX = 0 (geser kiri -6px DIHAPUS): pan kiri wrapper menggeser
+  // karakter 2D ke kiri (~5px diukur di final v2) sementara kamera 3D
+  // menggeser latar ke arah berlawanan — gabungannya terbaca goyang
+  // kiri-kanan di S2. Zoom 1-1,02 dan panY -4 dipertahankan.
+  const panX = 0;
   const panY = interpolate(local, [0, len], [0, -4], { easing: Easing.inOut(Easing.sin) });
   const Scene = SCENES[scene];
   return (
