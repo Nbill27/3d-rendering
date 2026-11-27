@@ -174,6 +174,6 @@ export const MyComposition = () => {
         width={1080}
         height={1920}
       />
-      >
+           </>
   );
 };
