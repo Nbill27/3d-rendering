@@ -593,7 +593,12 @@ const SmokeColumn = ({ x, z, local, s = 1, phase = 0, dark = false }: { x: numbe
  *  / lidah / bara pangkal, jadi putaran tetap hidup di video. */
 const FireVortex = ({ x, z, local }: { x: number; z: number; local: number }) => {
   const spin = local * 0.22; // makin cepat seiring adegan (local naik)
-  const wobble = Math.sin(local * 0.08) * 0.05;
+  // Wobble (miring kiri-kanan) DIHAPUS (wobble = 0, koreksi bill 27 Nov
+  // 15:55 WIB): Math.sin(local * 0.08) * 0.05 memiringkan corong raksasa
+  // ±0,05 rad — puncaknya ayun ~±50px kiri-kanan, ikut menyumbang goyang
+  // detik 22-27 bersama shake dunia. Tornado tetap berputar lewat spin
+  // heliks bara + lidah api di sub-grup bawah, jadi tidak mati.
+  const wobble = 0;
   // Radius badan corong pada ketinggian y (0-9,5): lurus 0,6 -> 2,5.
   const funnelR = (y: number) => 0.6 + (2.5 - 0.6) * Math.min(Math.max(y / 9.5, 0), 1);
   // Heliks bara: 16 titik, 1,75 putaran, y 0,9-8,9, di permukaan badan +0,18.
@@ -934,7 +939,14 @@ const Scene4World: React.FC<{ local: number; cfg: Cfg }> = ({ local, cfg }) => {
 
 const Scene5World: React.FC<{ local: number; cfg: Cfg }> = ({ local, cfg }) => {
   // Firestorm: corong tornado api di tengah, kota terbakar, atap beterbangan.
-  const shake = Math.sin(local * 1.7) * 0.06 * Math.min(local / 30, 1);
+  // Shake lateral DIHAPUS (shake = 0, koreksi bill 27 Nov 15:55 WIB):
+  // Math.sin(local * 1.7) * 0.06 menggetarkan SELURUH dunia 3D kiri-kanan
+  // ~8 Hz sementara karakter 2D diam — terbaca goyang kiri-kanan di detik
+  // 22-27 (diukur di final v2: pangkal tornado ayun 535-571px sementara
+  // kepala karakter diam 200,8-201,0px). Sama seperti perbaikan S2
+  // (gx = 0, panX = 0): latar harus diam terhadap karakter. Tornado tetap
+  // hidup lewat putaran heliks + lidah api + bara + asap + atap terbang.
+  const shake = 0;
   return (
     <group position={[shake, 0, 0]}>
       <Sky cfg={cfg} local={local} />

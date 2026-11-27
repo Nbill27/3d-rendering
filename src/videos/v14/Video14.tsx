@@ -1124,21 +1124,37 @@ const Scene4: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
   </AbsoluteFill>
 );
 
-const Scene5: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
-  <AbsoluteFill>
-    {/* Dua warga digeser ke SISI (kepala kiri berakhir x=493, kepala
-        kanan mulai x=763) supaya corong tornado api di tengah frame
-        (layar x~277-803 di puncak, pangkal x~477-603) terlihat penuh di
-        celah 270px di antara mereka + di atas kepala mereka. */}
-    <ContactShadow x={20} y={520} scale={1.7} />
-    {/* pose "walk" diganti "stand" (koreksi bill 27 Nov 14:21 WIB): sama
-        seperti S2, x karakter TETAP, jadi siklus jalan hanya berbaris di
-        tempat + memantul. Mereka berdiri di sisi membingkai tornado api. */}
-    <BeanHead x={20} y={520} scale={1.7} kind="town" town={1} shirt="#8a6a42" pose="stand" expr="shock" speaking={speaking} local={local} />
-    <ContactShadow x={640} y={580} scale={1.5} />
-    <BeanHead x={640} y={580} scale={1.5} kind="town" town={2} shirt="#5a6a7a" pose="stand" expr="worried" speaking={speaking} local={local} />
-  </AbsoluteFill>
-);
+const Scene5: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => {
+  // Dua warga BERJALAN KE DEPAN (ke arah kamera), seperti S2 (koreksi bill
+  // 27 Nov 16:09 WIB): pose "walk" (kaki kanan lalu kiri bergantian
+  // mengangkat ke atas, sudah ada di BeanHead) + y dan scale naik LINEAR
+  // terhadap local. S5 = baris 5 karaoke, frame global 694-835, jadi
+  // local 0..141. MAJU DIBATASI supaya corong tornado tetap terlihat dan
+  // tidak ada yang terpotong: kepala kiri berakhir x=493, kepala kanan
+  // mulai x=763, celah 270px di tengah untuk corong (pangkal x~477-603).
+  // Kanan digeser x 640->600 seiring membesar supaya tepi kanan kepala
+  // tidak lepas frame (pada scale 1,62 tepi kanan = 600+278*1,62 = 1050,
+  // aman). Di akhir: kepala kiri berakhir 20+278*1,8 = 520, badan kiri
+  // berakhir 20+245*1,8 = 466 < 477 (pangkal corong kiri); kepala kanan
+  // mulai 600+82*1,62 = 733, badan kanan mulai 600+115*1,62 = 786 > 603
+  // (pangkal corong kanan) — pangkal corong tetap terlihat penuh di celah.
+  // Kaki akhir ~y1464-1491, di sisi frame jadi tidak menabrak caption.
+  // ContactShadow ikut x/y/scale yang sama supaya bayangan tidak lepas.
+  const xL = 20;
+  const yL = interpolate(local, [0, 141], [520, 620]);
+  const sL = interpolate(local, [0, 141], [1.7, 1.8]);
+  const xR = interpolate(local, [0, 141], [640, 600]);
+  const yR = interpolate(local, [0, 141], [580, 680]);
+  const sR = interpolate(local, [0, 141], [1.5, 1.62]);
+  return (
+    <AbsoluteFill>
+      <ContactShadow x={xL} y={yL} scale={sL} />
+      <BeanHead x={xL} y={yL} scale={sL} kind="town" town={1} shirt="#8a6a42" pose="walk" expr="shock" speaking={speaking} local={local} />
+      <ContactShadow x={xR} y={yR} scale={sR} />
+      <BeanHead x={xR} y={yR} scale={sR} kind="town" town={2} shirt="#5a6a7a" pose="walk" expr="worried" speaking={speaking} local={local} />
+    </AbsoluteFill>
+  );
+};
 
 const Scene6: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
   <AbsoluteFill>
