@@ -127,9 +127,12 @@ const BeanHead: React.FC<{
   const swing = stepIdx % 2 === 0 ? swingAmt : 1 - swingAmt;
   const legL = walking ? -16 * swing : 0;
   const legR = walking ? 16 * (1 - swing) : 0;
-  const bob = walking
-    ? -Math.abs(Math.sin(local * 0.26)) * 12
-    : Math.sin(local * 0.09) * 4;
+  // Bob berdiri DIHAPUS (koreksi bill 27 Nov 14:21 WIB): bob idle
+  // Math.sin(local * 0.09) * 4 membuat semua karakter berdiri naik-turun
+  // SERENTAK ~7-8px di layar (skala 1.8-2.0, periode ~2,3 detik), terbaca
+  // seperti joget di detik 5-10. Karakter berdiri sekarang benar-benar
+  // diam (bob = 0); bob jalan hanya untuk pose "walk".
+  const bob = walking ? -Math.abs(Math.sin(local * 0.26)) * 12 : 0;
   const armSwing = walking ? 14 - 28 * swing : 0;
   // Blink: mata menutup ~4 frame tiap ~90 frame.
   const blink = local % 90 < 4;
@@ -1083,11 +1086,15 @@ const Scene2: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
         kanan berakhir x=1054 < 1080, tidak terpotong tepi. Kaki sejajar
         ~y1240-1260 (garis tanah sama). */}
     <ContactShadow x={0} y={560} scale={1.4} />
-    <BeanHead x={0} y={560} scale={1.4} kind="town" town={1} shirt="#8a6a42" pose="walk" expr="smile" speaking={speaking} local={local} />
+    {/* pose "walk" diganti "stand" (koreksi bill 27 Nov 14:21 WIB): x
+        karakter TETAP (tidak berpindah), jadi siklus jalan hanya
+        berbaris di tempat + memantul, terbaca seperti joget di detik
+        6-10. Mereka memang berdiri berjajar, bukan berjalan. */}
+    <BeanHead x={0} y={560} scale={1.4} kind="town" town={1} shirt="#8a6a42" pose="stand" expr="smile" speaking={speaking} local={local} />
     <ContactShadow x={360} y={600} scale={1.3} />
     <BeanHead x={360} y={600} scale={1.3} kind="elder" pose="stand" expr="content" speaking={speaking} local={local} />
     <ContactShadow x={720} y={640} scale={1.2} />
-    <BeanHead x={720} y={640} scale={1.2} kind="town" town={3} shirt="#8a3a2e" pose="walk" expr="smile" speaking={speaking} local={local} />
+    <BeanHead x={720} y={640} scale={1.2} kind="town" town={3} shirt="#8a3a2e" pose="stand" expr="smile" speaking={speaking} local={local} />
   </AbsoluteFill>
 );
 
@@ -1116,9 +1123,12 @@ const Scene5: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
         (layar x~277-803 di puncak, pangkal x~477-603) terlihat penuh di
         celah 270px di antara mereka + di atas kepala mereka. */}
     <ContactShadow x={20} y={520} scale={1.7} />
-    <BeanHead x={20} y={520} scale={1.7} kind="town" town={1} shirt="#8a6a42" pose="walk" expr="shock" speaking={speaking} local={local} />
+    {/* pose "walk" diganti "stand" (koreksi bill 27 Nov 14:21 WIB): sama
+        seperti S2, x karakter TETAP, jadi siklus jalan hanya berbaris di
+        tempat + memantul. Mereka berdiri di sisi membingkai tornado api. */}
+    <BeanHead x={20} y={520} scale={1.7} kind="town" town={1} shirt="#8a6a42" pose="stand" expr="shock" speaking={speaking} local={local} />
     <ContactShadow x={640} y={580} scale={1.5} />
-    <BeanHead x={640} y={580} scale={1.5} kind="town" town={2} shirt="#5a6a7a" pose="walk" expr="worried" speaking={speaking} local={local} />
+    <BeanHead x={640} y={580} scale={1.5} kind="town" town={2} shirt="#5a6a7a" pose="stand" expr="worried" speaking={speaking} local={local} />
   </AbsoluteFill>
 );
 
