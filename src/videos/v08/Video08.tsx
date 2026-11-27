@@ -13,12 +13,13 @@
 // is built from boxes / code in world.ts.
 import React, { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
-import { AbsoluteFill, continueRender, delayRender, getInputProps, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Img, continueRender, delayRender, getInputProps, staticFile, useCurrentFrame } from "remotion";
 import { ThreeCanvas } from "@remotion/three";
 import { useThree } from "@react-three/fiber";
 import { EffectComposer } from "@react-three/postprocessing";
 import { BlendFunction, BloomEffect, ToneMappingEffect, ToneMappingMode } from "postprocessing";
 import { World } from "./world";
+import { MapOverlay } from "./map";
 import { InkPass, noInkFallback } from "./ink";
 import { LensBlur, GrainEffect } from "./lensblur";
 import { GradeEffect, GRADES, GRADE_STRENGTH, gradeFor } from "./grade";
@@ -119,12 +120,47 @@ const CAPTION_BASE: React.CSSProperties = {
   textAlign: "center",
   textShadow: "3px 0 0 #000000, -3px 0 0 #000000, 0 3px 0 #000000, 0 -3px 0 #000000, 2px 2px 0 #000000, -2px -2px 0 #000000, 2px -2px 0 #000000, -2px 2px 0 #000000, 0 6px 12px rgba(0,0,0,0.55)",
 };
-const CaptionOverlay: React.FC<{ text: string }> = ({ text }) => {
+const CaptionOverlay: React.FC<{ text: string; marginBottom?: number }> = ({ text, marginBottom = 430 }) => {
   const { fontSize, lines } = captionLayout(text);
   return (
     <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", pointerEvents: "none" }}>
-      <div style={{ marginBottom: 430, maxWidth: 920, fontSize, ...CAPTION_BASE }}>
+      <div style={{ marginBottom, maxWidth: 920, fontSize, ...CAPTION_BASE }}>
         {lines.map((line, i) => <div key={i}>{line}</div>)}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+/** year + place label, top of frame, beat 1 only (f0-200, during L1).
+ *  Same white-bold/black-outline style as the captions, but at the top so it
+ *  never collides with the burned-in subtitle at the bottom. */
+const YearPlaceLabel: React.FC = () => {
+  const f = useCurrentFrame();
+  if (f >= 200) return null;
+  const opacity = Math.min(1, f / 8, (200 - f) / 8);
+  return (
+    <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", pointerEvents: "none", opacity }}>
+      <div style={{ marginTop: 120, fontSize: 54, ...CAPTION_BASE }}>1901, Niagara Falls</div>
+    </AbsoluteFill>
+  );
+};
+
+/** closing frame: the real Annie Taylor, 1902 (public domain, Bain News Service
+ *  via Library of Congress, file Queen-of-the-Mist.jpg). Shown f1700-1800, after
+ *  the voice ends at 56.68 s. The photo is portrait 3:4, shown contained on a dark
+ *  ground at its own aspect ratio, never stretched. */
+const PhotoFrame: React.FC = () => {
+  const f = useCurrentFrame();
+  if (f < 1700) return null;
+  const opacity = Math.min(1, (f - 1700) / 8);
+  return (
+    <AbsoluteFill style={{ background: "#1a1410", justifyContent: "center", alignItems: "center", opacity, pointerEvents: "none" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{ border: "6px solid #f2e6c4", lineHeight: 0 }}>
+          <Img src={staticFile("annie-taylor-photo.jpg")} style={{ width: 900, height: 1206, objectFit: "contain" }} />
+        </div>
+        <div style={{ marginTop: 36, fontSize: 44, ...CAPTION_BASE }}>The real Annie Taylor, 1902</div>
+        <div style={{ marginTop: 14, fontSize: 26, ...CAPTION_BASE, fontWeight: 600 }}>Photo: Bain News Service, via Library of Congress. Public domain.</div>
       </div>
     </AbsoluteFill>
   );
@@ -133,10 +169,17 @@ const CaptionOverlay: React.FC<{ text: string }> = ({ text }) => {
 export const Video08: React.FC = () => {
   const f = useCurrentFrame();
   const cap = captionAt(f / FPS);
+  // shot 3 keeps the standard caption margin: the raised 560 margin put the
+  // caption across Annie's face in the wide shot (v2 still_0360), while 430
+  // sits below her feet
+  const capMargin = 430;
   return (
     <AbsoluteFill style={{ background: "#cfe3f2" }}>
       {layersAt(f).map((l, i) => <ShotView key={i ? "over" : "base"} id={l.id} alpha={l.alpha} />)}
-      {cap && <CaptionOverlay text={cap} />}
+      <MapOverlay />
+      <YearPlaceLabel />
+      <PhotoFrame />
+      {cap && <CaptionOverlay text={cap} marginBottom={capMargin} />}
     </AbsoluteFill>
   );
 };

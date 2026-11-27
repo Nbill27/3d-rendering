@@ -13,7 +13,7 @@ import {
 } from "./toon";
 import {
   FPS, D0, SHOTS, BARREL_BANK, PUMP_POS, POOL_EDGE, STALL_POS, BANK_Y, StoryState,
-  clamp01,
+  clamp01, premium, pumpPose,
 } from "./story";
 import { NOINK } from "./ink";
 import { cardShade, blobMaterial, CARD_K } from "./cardshade";
@@ -219,34 +219,39 @@ const blob = (out: Stage, x: number, y: number, z: number, sc = 1, k = 1) => {
 
 export type Stage = { places: Place[]; fx: FxPlace[] };
 
-/** the ginger tabby cat, sitting, drawn on a 300 x 300 canvas; feet at y ~270 */
-const drawCat = (p: Pen) => {
+/** the ginger tabby cat, sitting, drawn on a 300 x 300 canvas; feet at y ~270.
+ *  tail: tail-wag angle in radians (motion-tabel.md C); headDx: head-turn shift in px. */
+const drawCat = (p: Pen, tail = 0, headDx = 0) => {
   const ginger = "#c07840", dark = "#8a4a28", cream = "#f2e2c8";
-  // tail curling up on the right
-  p.line([[205, 260], [245, 230], [250, 185], [235, 155]], ginger, 16);
+  // tail curling up on the right, rotated about its base (205, 260) by the wag angle
+  const rot = (x: number, y: number): [number, number] => {
+    const c = Math.cos(tail), s = Math.sin(tail), dx = x - 205, dy = y - 260;
+    return [205 + dx * c - dy * s, 260 + dx * s + dy * c];
+  };
+  p.line([rot(205, 260), rot(245, 230), rot(250, 185), rot(235, 155)], ginger, 16);
   // body
   p.ell(150, 215, 58, 62, ginger, 10);
   // cream chest
   p.ell(150, 235, 34, 34, cream, 8);
-  // head
-  p.ell(150, 122, 44, 40, ginger, 10);
+  // head (shifted by headDx when the cat turns to look at Annie)
+  p.ell(150 + headDx, 122, 44, 40, ginger, 10);
   // ears
-  p.poly([[118, 92], [128, 58], [148, 86]], ginger, 8);
-  p.poly([[152, 86], [172, 58], [182, 92]], ginger, 8);
+  p.poly([[118 + headDx, 92], [128 + headDx, 58], [148 + headDx, 86]], ginger, 8);
+  p.poly([[152 + headDx, 86], [172 + headDx, 58], [182 + headDx, 92]], ginger, 8);
   // stripes on the head and back
-  p.stroke([[135, 84], [135, 100]], 5, dark);
-  p.stroke([[150, 82], [150, 98]], 5, dark);
-  p.stroke([[165, 84], [165, 100]], 5, dark);
+  p.stroke([[135 + headDx, 84], [135 + headDx, 100]], 5, dark);
+  p.stroke([[150 + headDx, 82], [150 + headDx, 98]], 5, dark);
+  p.stroke([[165 + headDx, 84], [165 + headDx, 100]], 5, dark);
   p.stroke([[120, 180], [120, 205]], 5, dark);
   p.stroke([[180, 180], [180, 205]], 5, dark);
   // face: eyes, nose, mouth, whiskers
-  p.dot(134, 118, 5); p.dot(166, 118, 5);
-  p.poly([[146, 134], [154, 134], [150, 141]], "#c05a6a", 4);
-  p.stroke([[150, 141], [150, 148]], 3);
-  p.stroke([[110, 128], [132, 134]], 3);
-  p.stroke([[110, 140], [132, 138]], 3);
-  p.stroke([[190, 128], [168, 134]], 3);
-  p.stroke([[190, 140], [168, 138]], 3);
+  p.dot(134 + headDx, 118, 5); p.dot(166 + headDx, 118, 5);
+  p.poly([[146 + headDx, 134], [154 + headDx, 134], [150 + headDx, 141]], "#c05a6a", 4);
+  p.stroke([[150 + headDx, 141], [150 + headDx, 148]], 3);
+  p.stroke([[110 + headDx, 128], [132 + headDx, 134]], 3);
+  p.stroke([[110 + headDx, 140], [132 + headDx, 138]], 3);
+  p.stroke([[190 + headDx, 128], [168 + headDx, 134]], 3);
+  p.stroke([[190 + headDx, 140], [168 + headDx, 138]], 3);
   // paws
   p.ell(128, 272, 16, 9, ginger, 6);
   p.ell(172, 272, 16, 9, ginger, 6);
@@ -264,11 +269,17 @@ const drawPaper = (p: Pen) => {
   p.dot(205, 180, 22, "#c0353a");
 };
 
-/** drifting mist at the falls base: a slow soft puff card */
+/** drifting mist at the falls base: a slow soft puff card.
+ *  Sine loop (no jump at the wrap, motion-tabel.md E11) and a slow horizontal drift,
+ *  frozen while the barrel falls (t 33.8-35.6) so the focus stays on it (motion G).
+ *  Cards are wide and flat so the mist reads as mist, not white eggs (stage01). */
 const mist = (out: Stage, x: number, y: number, z: number, w: number, h: number, t: number, seed = 0) => {
-  const pt = ((t * 0.06 + seed * 0.37) % 1);
+  const ph = t * 0.06 + seed * 0.37;
+  const pt = 0.5 - 0.5 * Math.cos(ph * Math.PI * 2);
+  const frozen = t >= 33.8 && t <= 35.6;
+  const dx = frozen ? 0 : 0.5 * Math.sin((t / 240) * Math.PI * 2 + seed * 1.7);
   out.fx.push({ key: `mist|${Math.round(pt * 8) / 8}`, cw: 300, ch: 300, draw: (p) => fxPuff(p, pt),
-    x, y, z, w, h, soft: true });
+    x: x + dx, y, z, w, h, soft: true });
 };
 
 // ---------------- who ----------------
@@ -292,25 +303,28 @@ const bankCrowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, annie(), BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3, front,
     { mode: "stand", expr: "smile", blink: lidAt(t, 700), look: 0 }, {}));
   blob(out, BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3);
-  for (const [i, x, z] of [[0, 4.3, -19.5], [1, 0.2, -20.5]] as const) {
+  // friends spread apart: v1 put one directly behind Annie, so only his head showed (stage01)
+  for (const [i, x, z] of [[0, 5.0, -20.0], [1, 4.0, -19.0]] as const) {
     out.places.push(person(cam, friend(i), x, BANK_Y, z, front,
       { mode: "stand", expr: "neutral", blink: lidAt(t, i + 710), look: 0 }, {}));
     blob(out, x, BANK_Y, z);
   }
-  for (const [i, x, z] of [[0, -1, -22.5], [1, 1, -24], [2, 5.5, -23], [3, 6.5, -23.5]] as const) {
+  for (const [i, x, z] of [[0, -1.5, -22.5], [1, 2.5, -24.5], [2, 5.5, -23], [3, 6.5, -23.5]] as const) {
     out.places.push(person(cam, crowd(i), x, BANK_Y, z, front,
       { mode: "stand", expr: "neutral", blink: lidAt(t, i + 730), look: 0 }, {}));
     blob(out, x, BANK_Y, z);
   }
-  // the cat at her feet, on the bank
-  out.fx.push({ key: "cat|sit", cw: 300, ch: 300, draw: drawCat, x: 0.2, y: BANK_Y + 0.24, z: -16.8, w: 0.6, h: 0.6 });
-  mist(out, 0, 2, -60, 8, 5, t, 0);
+  // the cat at her feet, between Annie and the barrel on open sand: v1 put it at
+  // (0.5, -17.2), which projects off the left frame edge from this camera
+  out.fx.push({ key: "cat|sit", cw: 300, ch: 300, draw: drawCat, x: 1.8, y: BANK_Y + 0.24, z: -17.0, w: 0.6, h: 0.6 });
+  mist(out, 0, 2, -60, 10, 3.5, t, 0);
 };
 
 /** the idea (shot 2): Annie gestures at the barrel, her wild plan; two friends listen. */
 const ideaCrowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, annie(), BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3, front,
-    { mode: "stand", expr: "smile", blink: lidAt(t, 700), wave: 0.5 + 0.25 * Math.sin(t * 2.4), look: 0 }, {}));
+    // bigger gesture: v1 raised her arm only a little and the "wild idea" did not read
+    { mode: "stand", expr: "smile", blink: lidAt(t, 700), wave: 0.7 + 0.3 * Math.sin(t * 2.4) ** 3, look: 0 }, {}));
   blob(out, BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3);
   out.places.push(person(cam, friend(1), 4.2, BANK_Y, -19.5, front,
     { mode: "stand", expr: "neutral", blink: lidAt(t, 711), look: 0 }, {}));
@@ -318,7 +332,7 @@ const ideaCrowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, friend(2), 0.2, BANK_Y, -20, front,
     { mode: "stand", expr: "neutral", blink: lidAt(t, 712), look: 0 }, {}));
   blob(out, 0.2, BANK_Y, -20);
-  out.fx.push({ key: "cat|sit", cw: 300, ch: 300, draw: drawCat, x: 0.2, y: BANK_Y + 0.24, z: -16.8, w: 0.6, h: 0.6 });
+  out.fx.push({ key: "cat|sit", cw: 300, ch: 300, draw: drawCat, x: 1.8, y: BANK_Y + 0.24, z: -17.0, w: 0.6, h: 0.6 });
 };
 
 /** the stakes (shot 3): the falls tower over the bank; Annie and her friends look up at them. */
@@ -326,20 +340,21 @@ const stakesCrowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, annie(), BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3, front,
     { mode: "stand", expr: "nervous", blink: lidAt(t, 700), headTilt: -0.15, look: 0 }, {}));
   blob(out, BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3);
-  for (const [i, x, z] of [[0, 1.5, -19.5], [1, 3.5, -20.5]] as const) {
+  for (const [i, x, z] of [[0, 0.0, -19.5], [1, 4.0, -20.5]] as const) {
     out.places.push(person(cam, friend(i), x, BANK_Y, z, front,
       { mode: "stand", expr: "shock", blink: lidAt(t, i + 710), headTilt: -0.15, look: 0 }, {}));
     blob(out, x, BANK_Y, z);
   }
-  mist(out, 0, 2, -60, 8, 5, t, 1);
-  mist(out, -8, 2.5, -58, 6, 4, t, 2);
-  mist(out, 8, 2.5, -58, 6, 4, t, 3);
+  mist(out, 0, 2, -60, 9, 3.5, t, 1);
+  mist(out, -8, 2.5, -58, 7, 3, t, 2);
+  mist(out, 8, 2.5, -58, 7, 3, t, 3);
 };
 
 /** the cat test (shot 4): the cat sits on the barrel, Annie leans over it, friends watch. */
 const catCrowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, annie(), BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3, front,
-    { mode: "stand", expr: "smile", blink: lidAt(t, 700), tilt: 0.15, look: 0 }, {}));
+    // lean further over the cat: v1 tilted only 0.15 and the inspection did not read
+    { mode: "stand", expr: "smile", blink: lidAt(t, 700), tilt: 0.25, look: 0 }, {}));
   blob(out, BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3);
   out.places.push(person(cam, friend(1), 4.3, BANK_Y, -19.5, front,
     { mode: "stand", expr: "smile", blink: lidAt(t, 711), look: 0 }, {}));
@@ -347,24 +362,44 @@ const catCrowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, friend(2), 0.2, BANK_Y, -19.8, front,
     { mode: "stand", expr: "grin", blink: lidAt(t, 712), look: 0 }, {}));
   blob(out, 0.2, BANK_Y, -19.8);
-  // the cat sits on the barrel top (barrel top y BANK_Y + 1.5; card feet land on it)
-  out.fx.push({ key: "cat|sit", cw: 300, ch: 300, draw: drawCat, x: BARREL_BANK[0], y: BANK_Y + 1.78, z: BARREL_BANK[2], w: 0.7, h: 0.7 });
+  // the cat sits on the barrel top (barrel top y BANK_Y + 1.5; card feet land on it).
+  // Tail wags in 48-frame cycles and the head turns to Annie f540-558 (motion-tabel.md C).
+  const f = t * FPS;
+  const tail = f >= 480 && f < 660 ? 0.35 * Math.sin(((f - 480) / 48) * Math.PI * 2) : 0;
+  const headDx = f >= 540 && f < 558 ? 6 * premium((f - 540) / 18)
+    : f >= 558 && f < 600 ? 6
+    : f >= 600 && f < 618 ? 6 * (1 - premium((f - 600) / 18)) : 0;
+  out.fx.push({ key: `cat|sit|${Math.round(tail * 8) / 8}|${Math.round(headDx)}`, cw: 300, ch: 300,
+    draw: (p) => drawCat(p, tail, headDx), x: BARREL_BANK[0], y: BANK_Y + 1.78, z: BARREL_BANK[2], w: 0.7, h: 0.7 });
 };
 
 /** the birthday (shot 5): Annie climbs into the barrel, friends hold the lid above her,
  *  the crowd watches. The lid itself is a world group (storyState.lidHeld). */
 const birthdayCrowd = (t: number, cam: CamInfo, out: Stage) => {
-  out.places.push(person(cam, annie(), BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3, front,
-    { mode: "stand", expr: "nervous", blink: lidAt(t, 700), tilt: 0.1, look: 0 }, {}));
-  blob(out, BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3);
-  // Graham reaches up toward the held lid
-  out.places.push(person(cam, friend(1), 3.9, BANK_Y, -19.2, front,
+  // Annie climbs into the barrel f690-738 (motion-tabel.md A): walk to the barrel,
+  // rise, then hide inside it. V1 left her standing beside it the whole shot.
+  const f = t * FPS;
+  const ax = f < 690 ? BARREL_BANK[0] - 1.4
+    : f < 714 ? 1.1 + 0.8 * premium((f - 690) / 24)
+    : 1.9 + 0.6 * premium((f - 714) / 24);
+  const ay = f < 714 ? BANK_Y : BANK_Y + 0.45 * premium((f - 714) / 24);
+  if (f < 738) {
+    out.places.push(person(cam, annie(), ax, ay, BARREL_BANK[2] + 0.3, front,
+      { mode: "stand", expr: "nervous", blink: lidAt(t, 700), tilt: 0.1, look: 0 }, {}));
+    blob(out, ax, BANK_Y, BARREL_BANK[2] + 0.3);
+  }
+  // Graham reaches up toward the held lid: he stands at (2.9, -19.0), just behind
+  // the barrel's right side, so his head and raised arm show above it. V2 put him
+  // at (3.9, -19.2), off the right frame edge, and the lid had no visible holder.
+  out.places.push(person(cam, friend(1), 2.9, BANK_Y, -19.0, front,
     { mode: "stand", expr: "neutral", blink: lidAt(t, 711), wave: 0.8, look: 0 }, {}));
-  blob(out, 3.9, BANK_Y, -19.2);
+  blob(out, 2.9, BANK_Y, -19.0);
   out.places.push(person(cam, friend(2), 0.6, BANK_Y, -19.2, front,
     { mode: "stand", expr: "neutral", blink: lidAt(t, 712), look: 0 }, {}));
   blob(out, 0.6, BANK_Y, -19.2);
-  for (const [i, x, z] of [[0, 0, -22], [2, -1.5, -20.5]] as const) {
+  // the second onlooker sits fully off-frame west: v2 put him at (-1.5, -20.5),
+  // half-cut at the left edge (still_0720)
+  for (const [i, x, z] of [[0, 0, -22], [2, -3.0, -22]] as const) {
     out.places.push(person(cam, crowd(i + 2), x, BANK_Y, z, front,
       { mode: "stand", expr: "neutral", blink: lidAt(t, i + 740), look: 0 }, {}));
     blob(out, x, BANK_Y, z);
@@ -378,22 +413,22 @@ const pumpCrowd = (t: number, cam: CamInfo, out: Stage, b: StoryState) => {
   if (t >= 30 || b.annieIn) return;
   const px = PUMP_POS[0] + 0.7, pz = PUMP_POS[2] + 0.2; // the friend stands east of the pump, facing it
   const view = viewOf(cam, px, pz, -1, 0);
-  const pose = 0.55 + 0.45 * Math.sin(t * 5);
+  const pose = pumpPose(t * FPS); // 36-frame stroke, synced with the pump handle in world.ts
   out.places.push(person(cam, friend(0), px, D0, pz, view,
     { mode: "stand", expr: "neutral", blink: lidAt(t, 710), look: 0 },
     { mode: "push", pose, hand: [430, 690], expr: "neutral", blink: lidAt(t, 710) }));
   blob(out, px, D0, pz);
-  out.places.push(person(cam, friend(1), 3.5, BANK_Y, -19.5, front,
+  out.places.push(person(cam, friend(1), 2.7, BANK_Y, -19.5, front,
     { mode: "stand", expr: "neutral", blink: lidAt(t, 711), look: 0 }, {}));
-  blob(out, 3.5, BANK_Y, -19.5);
+  blob(out, 2.7, BANK_Y, -19.5);
 };
 
 /** the drop (shot 7): no watchers in frame — the falls camera looks north-west and
  *  the beach is off-axis right; the barrel falls (world group) and the splash erupts
  *  at the base. Mist kept small and tight to the cliff so it reads as mist, not eggs. */
 const dropCrowd = (t: number, cam: CamInfo, out: Stage, b: StoryState) => {
-  mist(out, 0, 0.7, -62, 3.5, 2, t, 0);
-  mist(out, -8, 1.0, -60, 3.5, 2, t, 4);
+  mist(out, 0, 0.7, -62, 4.5, 1.8, t, 0);
+  mist(out, -8, 1.0, -60, 4.5, 1.8, t, 4);
   if (b.splash > 0) {
     out.fx.push({ key: `splash|${Math.round(b.splash * 8) / 8}`, cw: 800, ch: 800, draw: (p) => fxSplash(p, b.splash),
       x: 0, y: 2.2, z: -63, w: 4, h: 4 });
@@ -403,47 +438,70 @@ const dropCrowd = (t: number, cam: CamInfo, out: Stage, b: StoryState) => {
 /** the rescue (shot 8): the barrel lies on its side at the pool edge (world group);
  *  Annie climbs out, dazed; the rescuers reach to help her. */
 const rescueCrowd = (t: number, cam: CamInfo, out: Stage) => {
-  out.places.push(person(cam, annie(), POOL_EDGE[0] - 0.9, BANK_Y, POOL_EDGE[2] + 0.2, front,
-    { mode: "stroll", phase: 0.2, expr: "dazed", blink: lidAt(t, 700), look: 0 }, {}));
+  // Annie rises out of the barrel f1110-1140 (motion-tabel.md E): v1 left her
+  // standing upright the whole time, so "climbed out alive" never read
+  const f = t * FPS, u = clamp01((f - 1110) / 30);
+  const ry = BANK_Y - 0.15 + 0.15 * premium(u), rtilt = 0.25 * (1 - premium(u));
+  out.places.push(person(cam, annie(), POOL_EDGE[0] - 0.9, ry, POOL_EDGE[2] + 0.2, front,
+    { mode: "stroll", phase: 0.2, expr: "dazed", blink: lidAt(t, 700), tilt: rtilt, look: 0 }, {}));
   blob(out, POOL_EDGE[0] - 0.9, BANK_Y, POOL_EDGE[2] + 0.2, 0.6);
   out.places.push(person(cam, friend(1), POOL_EDGE[0] + 1.3, BANK_Y, POOL_EDGE[2] + 1, front,
-    { mode: "stand", expr: "relief", blink: lidAt(t, 711), wave: 0.3, look: 0 }, {}));
+    { mode: "stand", expr: "relief", blink: lidAt(t, 711), wave: 0.3 * premium(clamp01((f - 1110) / 18)), look: 0 }, {}));
   blob(out, POOL_EDGE[0] + 1.3, BANK_Y, POOL_EDGE[2] + 1, 0.6);
-  out.places.push(person(cam, friend(2), POOL_EDGE[0] - 1.5, BANK_Y, POOL_EDGE[2] + 1.5, front,
+  // second rescuer moved clear of the barrel: v1 hid him behind it (stage01)
+  out.places.push(person(cam, friend(2), POOL_EDGE[0] - 2.3, BANK_Y, POOL_EDGE[2] + 1.0, front,
     { mode: "stand", expr: "relief", blink: lidAt(t, 712), look: 0 }, {}));
-  blob(out, POOL_EDGE[0] - 1.5, BANK_Y, POOL_EDGE[2] + 1.5, 0.6);
-  mist(out, 0, 1.5, -60, 7, 4, t, 0);
+  blob(out, POOL_EDGE[0] - 2.3, BANK_Y, POOL_EDGE[2] + 1.0, 0.6);
+  mist(out, 0, 1.5, -60, 9, 3.5, t, 0);
 };
 
 /** the fame (shot 9): the crowd cheers around Annie at the bank; one waves a newspaper. */
 const fameCrowd = (t: number, cam: CamInfo, out: Stage) => {
+  const f = t * FPS;
+  // staggered cheering (motion-tabel.md D1): v1 waved Annie + 3 crowd members at once (50%)
+  const annieWave = f >= 1260 && f < 1380 ? 0.6 + 0.3 * Math.sin(t * 3) ** 3 : undefined;
   out.places.push(person(cam, annie(), BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3, front,
-    { mode: "stand", expr: "grin", blink: lidAt(t, 700), wave: 0.6 + 0.3 * Math.sin(t * 3), look: 0 }, {}));
+    { mode: "stand", expr: "grin", blink: lidAt(t, 700), wave: annieWave, look: 0 }, {}));
   blob(out, BARREL_BANK[0] - 1.4, BANK_Y, BARREL_BANK[2] + 0.3);
-  // crowd kept near the camera axis (x 0..3.8): the 9:16 frame is narrow, x 4.5+ falls off-frame
+  // crowd kept near the camera axis (x 0..3.8): the 9:16 frame is narrow, x 4.5+ falls off-frame.
+  // The two at the left edge moved in: v1 cut them off at x -0.5 (stage01, still_1400).
   for (const [i, x, z, e] of [
-    [0, 0.5, -19.5, "grin"], [1, 3.2, -19.8, "laugh"], [2, -0.5, -21, "grin"],
-    [3, 3.8, -20.5, "laugh"], [4, -0.5, -14.5, "grin"], [5, 3.5, -15, "laugh"],
+    [0, 0.5, -19.5, "grin"], [1, 3.2, -19.8, "laugh"], [2, 0.3, -21, "grin"],
+    [3, 3.8, -20.5, "laugh"], [4, 0.3, -14.5, "grin"], [5, 3.5, -15, "laugh"],
   ] as const) {
+    const waving = i % 2 === 0 ? undefined
+      : i === 5 ? (f >= 1440 && f < 1530 ? 0.6 + 0.3 * Math.sin(t * 3) ** 3 : undefined)
+      : (f >= 1380 && f < 1500 ? 0.6 + 0.3 * Math.sin(t * 3) ** 3 : undefined);
     out.places.push(person(cam, crowd(i), x, BANK_Y, z, front,
-      { mode: "stand", expr: e as Expr, blink: lidAt(t, i + 730), wave: i % 2 ? 0.7 : undefined, look: 0 }, {}));
+      { mode: "stand", expr: e as Expr, blink: lidAt(t, i + 730), wave: waving, look: 0 }, {}));
     blob(out, x, BANK_Y, z);
   }
-  // the newspaper waved by the man at (3.2, -19.8), above his head, inside the frame
-  out.fx.push({ key: "paper", cw: 300, ch: 300, draw: drawPaper, x: 3.0, y: 1.9, z: -19.5, w: 0.5, h: 0.55, rot: 0.15 });
+  // the newspaper waved by the man at (3.2, -19.8), above his head, inside the frame.
+  // It flutters in 24-frame cycles now (motion-tabel.md D); v1 left it hanging in the air.
+  const flutter = 0.1 + 0.25 * Math.sin((f / 24) * Math.PI * 2);
+  out.fx.push({ key: `paper|${Math.round(flutter * 8) / 8}`, cw: 300, ch: 300, draw: drawPaper,
+    x: 3.1, y: 1.95 + 0.05 * Math.sin((f / 24) * Math.PI * 2), z: -19.5, w: 0.5, h: 0.55, rot: flutter });
 };
 
 /** the stall (shot 10, golden): older Annie at her photo stall on the town street,
  *  a customer looking at the photos, the barrel on display beside her (world group). */
 const stallCrowd = (t: number, cam: CamInfo, out: Stage) => {
+  const f = t * FPS;
   // women kept close to the stall centre so the photo cards show in the gap between them
   const ax = STALL_POS[0] + 1.3, az = STALL_POS[2] - 0.7; // older Annie beside her stall
+  // slow nod f1600-1624 (motion-tabel.md I): v1 left the 9-second closing shot static
+  const nod = f >= 1600 && f < 1624 ? 0.12 * Math.sin(((f - 1600) / 24) * Math.PI) : 0;
   out.places.push(person(cam, annie(true), ax, D0, az, front,
-    { mode: "stand", expr: "smile", blink: lidAt(t, 700), look: 0 }, {}));
+    { mode: "stand", expr: "smile", blink: lidAt(t, 700), headTilt: nod, look: 0 }, {}));
   blob(out, ax, D0, az);
-  out.places.push(person(cam, crowd(1), STALL_POS[0] - 1.3, D0, STALL_POS[2] - 1.1, front,
-    { mode: "stand", expr: "neutral", blink: lidAt(t, 731), look: 0 }, {}));
-  blob(out, STALL_POS[0] - 1.3, D0, STALL_POS[2] - 1.1);
+  // the customer stands south-west of the stall, in the street in front of the
+  // photo board, looking at the photos. V2 put her east of the stall (6.2, 30.5),
+  // which this south-west camera projects to the far left edge, half-cut.
+  const cust: Who = { i: 731, o: { ...townsfolk(1), skin: SKINS[3], hat: "cap", cap: "#3a3f52", dress: "#4a6a8a" }, okey: "cust" };
+  const point = f >= 1640 && f < 1658 ? 0.5 : undefined;
+  out.places.push(person(cam, cust, 2.5, D0, 30.0, front,
+    { mode: "stand", expr: "neutral", blink: lidAt(t, 731), wave: point, look: 0 }, {}));
+  blob(out, 2.5, D0, 30.0);
 };
 
 /** everything with a face in shot `id` at time t */
