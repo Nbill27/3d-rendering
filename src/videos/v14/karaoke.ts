@@ -1,0 +1,56 @@
+// karaoke.ts - TIMING TERUKUR dari VO Peshtigo Fire (WhisperX tiny,
+// stem_voice.wav / mix.wav 60.000 dtk; voice avocado_v2:casper).
+// 44 frasa. Kata-kata SAMA PERSIS dengan SCRIPT.md L1-L10 (164 kata).
+// Koreksi atas salah-dengar WhisperX tiny (lihat SKILL_CHECKLIST Tahap 7):
+//   'Pesh to Go' -> 'Peshtigo', 'It streets' -> 'its streets',
+//   'flames' -> 'flame', 'Peshnego' -> 'Peshtigo', '1200/2500' -> '1,200/2,500'.
+// Timing frasa dari onset/offset kata WhisperX (detik x30 = frame).
+// SATU-SATUNYA sumber timing teks; komposisi membaca file ini.
+export type KaraokePhrase = { phrase: string; startFrame: number; endFrame: number; line: number };
+
+export const KARAOKE: KaraokePhrase[] = [
+  { phrase: "Everyone knows", startFrame: 2, endFrame: 19, line: 1 },
+  { phrase: "the Chicago Fire.", startFrame: 19, endFrame: 42, line: 1 },
+  { phrase: "Nobody knows the fire", startFrame: 56, endFrame: 81, line: 1 },
+  { phrase: "that killed five times", startFrame: 81, endFrame: 109, line: 1 },
+  { phrase: "as many people", startFrame: 109, endFrame: 127, line: 1 },
+  { phrase: "the same night.", startFrame: 131, endFrame: 154, line: 1 },
+  { phrase: "October 8th, 1871.", startFrame: 167, endFrame: 217, line: 2 },
+  { phrase: "A small logging town", startFrame: 229, endFrame: 258, line: 2 },
+  { phrase: "in Wisconsin", startFrame: 258, endFrame: 278, line: 2 },
+  { phrase: "called Peshtigo.", startFrame: 283, endFrame: 307, line: 2 },
+  { phrase: "That summer was one", startFrame: 318, endFrame: 344, line: 3 },
+  { phrase: "of the driest on record.", startFrame: 344, endFrame: 377, line: 3 },
+  { phrase: "The town was built of wood,", startFrame: 391, endFrame: 422, line: 3 },
+  { phrase: "its streets paved", startFrame: 430, endFrame: 453, line: 3 },
+  { phrase: "with wood chips,", startFrame: 453, endFrame: 470, line: 3 },
+  { phrase: "and fires had burned for days.", startFrame: 479, endFrame: 523, line: 3 },
+  { phrase: "Then the wind came.", startFrame: 536, endFrame: 567, line: 4 },
+  { phrase: "A hundred miles an hour.", startFrame: 575, endFrame: 607, line: 4 },
+  { phrase: "The fire started making", startFrame: 621, endFrame: 654, line: 4 },
+  { phrase: "its own weather.", startFrame: 654, endFrame: 673, line: 4 },
+  { phrase: "A tornado of flame", startFrame: 694, endFrame: 725, line: 5 },
+  { phrase: "swept through the town.", startFrame: 727, endFrame: 752, line: 5 },
+  { phrase: "In less than two hours,", startFrame: 763, endFrame: 790, line: 5 },
+  { phrase: "Peshtigo was gone.", startFrame: 801, endFrame: 835, line: 5 },
+  { phrase: "People fled to the river", startFrame: 847, endFrame: 876, line: 6 },
+  { phrase: "and stood in the water", startFrame: 879, endFrame: 903, line: 6 },
+  { phrase: "while their town burned.", startFrame: 902, endFrame: 931, line: 6 },
+  { phrase: "Some drowned.", startFrame: 953, endFrame: 972, line: 6 },
+  { phrase: "Some froze.", startFrame: 989, endFrame: 1009, line: 6 },
+  { phrase: "Between 1,200 and 2,500", startFrame: 1022, endFrame: 1071, line: 7 },
+  { phrase: "people died.", startFrame: 1080, endFrame: 1100, line: 7 },
+  { phrase: "It is still the deadliest wildfire", startFrame: 1112, endFrame: 1159, line: 7 },
+  { phrase: "in American history.", startFrame: 1159, endFrame: 1188, line: 7 },
+  { phrase: "So why has nobody", startFrame: 1202, endFrame: 1244, line: 8 },
+  { phrase: "heard of it?", startFrame: 1246, endFrame: 1263, line: 8 },
+  { phrase: "Because that same night,", startFrame: 1286, endFrame: 1328, line: 9 },
+  { phrase: "250 miles south,", startFrame: 1329, endFrame: 1361, line: 9 },
+  { phrase: "Chicago burned.", startFrame: 1370, endFrame: 1399, line: 9 },
+  { phrase: "Only 300 died there,", startFrame: 1415, endFrame: 1452, line: 9 },
+  { phrase: "but big cities make the news.", startFrame: 1461, endFrame: 1500, line: 9 },
+  { phrase: "The deadliest wildfire", startFrame: 1527, endFrame: 1562, line: 10 },
+  { phrase: "in America was forgotten", startFrame: 1563, endFrame: 1606, line: 10 },
+  { phrase: "because a bigger city", startFrame: 1613, endFrame: 1632, line: 10 },
+  { phrase: "burned on the same night.", startFrame: 1643, endFrame: 1680, line: 10 },
+];
