@@ -530,17 +530,34 @@ export const bodyFront = (p: Pen, o: Outfit, opts: FrontOpts) => {
   const tall = (1 + Bd.torso + Bd.legs) * HH, sole = 975;
   // body bob 5 % (march) / 3 % (stroll) of the height, lowest at contact (phase 0 and 0.5)
   const bob = mode === "march" ? 0.025 * tall * Math.cos(2 * two * phase) : mode === "stroll" ? 0.015 * tall * Math.cos(2 * two * phase) : 0;
-  const torsoBot = mode === "sit" ? sole - 0.2 * HH : sole - Bd.legs * HH + bob;
-  const chin = torsoBot - Bd.torso * HH, hc = chin - H.b, crown = hc - H.b, hipY = torsoBot - 0.12 * HH;
+  // sit: the torso is COMPRESSED (a seated torso is about half as tall as a standing
+  // one) so the hips land at chair-seat height (~0.45 m) while the head stays exactly
+  // where it was (chin = sole - 1.3*HH, crown ~1.35 m). The old sit torso ran down to
+  // 0.12 m above the floor, so sitters read as standing people with short splayed legs.
+  const torsoLen = mode === "sit" ? 0.53 * HH : Bd.torso * HH;
+  const torsoBot = mode === "sit" ? sole - 0.77 * HH : sole - Bd.legs * HH + bob;
+  const chin = torsoBot - torsoLen, hc = chin - H.b, crown = hc - H.b, hipY = torsoBot - 0.12 * HH;
   const thick = thickAngle(light), ow = 5 * u;
   const legCol = mix(o.pants, INK, 0.55), armCol = mix(o.jacket, INK, 0.5), footCol = o.boots;
   const legW = 5.8 * u, footW = 7.5 * u;
   // ---- legs + feet (not rotated) ----
   p.rot = null;
   if (mode === "sit") {
+    // Putaran 3 (27 Nov, referensi duduk bill): paha HARUS horizontal dan TERLIHAT
+    // berbaring di atas dudukan, lutut tertekuk ~90 derajat tepat di tepi depan dudukan,
+    // betis vertikal ke lantai, kaki menapak di lantai. Putaran 2 gagal karena paha
+    // (pinggul ke lutut, 15u->36u) seluruhnya tersembunyi di balik blob torso (setengah
+    // lebar ~73 px di tinggi pinggul) dan tertutup bantal/dudukan di depan kartu — yang
+    // tersisa hanya dua garis tipis menjuntai lurus di bawah dudukan, jadi masih terbaca
+    // "menembus bangku". Perbaikan: lutut digeser jauh ke luar (62u, jelas di luar
+    // siluet torso), paha digambar sebagai segmen TEBAL terpisah (9u) supaya terbaca
+    // sebagai massa paha yang berbaring di atas dudukan, betis vertikal dari lutut ke
+    // kaki tepat di bawah lutut. Lutut di hipY + 0,04*HH (hampir setinggi pinggul).
+    const thighW = 9 * u;
     for (const side of [-1, 1]) {
-      const h: P2 = [300 + side * 15 * u, hipY], k: P2 = [300 + side * 36 * u, hipY + 0.2 * HH], f: P2 = [300 + side * 44 * u, sole - 8 * u];
-      p.stroke(curve(h, k, f), legW, legCol);
+      const h: P2 = [300 + side * 15 * u, hipY], k: P2 = [300 + side * 62 * u, hipY + 0.04 * HH], f: P2 = [300 + side * 66 * u, sole - 8 * u];
+      p.stroke([h, k], thighW, legCol); // paha horizontal, tebal, di atas dudukan
+      p.stroke([k, f], legW, legCol); // betis vertikal ke lantai
       footStroke(p, [f[0] - side * 2 * u, f[1]], [f[0] + side * 12 * u, f[1] - 5 * u], footW, footCol);
     }
   } else if (mode === "fall") {
@@ -639,7 +656,9 @@ export const bodyFront = (p: Pen, o: Outfit, opts: FrontOpts) => {
       }
       if (o.sash) p.band([[tcx - 1.3 * T.a, torsoBot - 0.32 * HH], [tcx + 1.3 * T.a, torsoBot - 0.32 * HH]], o.sash, 0.13 * HH, 1.8 * u);
       for (let i = 0; i < 4; i++) {
-        const y = chin + 0.12 * HH + i * 0.2 * HH;
+        // sit: the torso is half-height, so the buttons sit closer together (else the
+        // lower two fall outside the torso blob and get clipped away)
+        const y = chin + 0.12 * HH + i * (mode === "sit" ? 0.09 * HH : 0.2 * HH);
         if (o.sash && Math.abs(y - (torsoBot - 0.32 * HH)) < 0.08 * HH) continue;
         p.dot(tcx + 2 * u * facing, y, 2.2 * u + 0.8 * u, INK); p.dot(tcx + 2 * u * facing, y, 2.2 * u, o.buttons ?? shade(o.jacket, 0.7));
       }
@@ -1144,27 +1163,53 @@ export const fxNewspaper = (p: Pen) => {
   p.stroke([[470, 105], [490, 105]], 6, INK);
 };
 
-/** forged government letter + envelope on a 600 x 400 canvas: cream sheet, seal ribbon, red wax seal */
+/** forged government letter + envelope on a 600 x 400 canvas: cream sheet, letterhead
+ *  band + emblem, address block, signature flourish, round red stamp, wax-sealed envelope.
+ *  Hierarchy of reading (anatomy Fig 2): letterhead first, then the stamp, then the signature. */
 export const fxLetter = (p: Pen) => {
   p.poly(rrect(60, 40, 540, 330, 10), "#fbf7ea", 10); // the letter sheet
-  p.stroke([[100, 90], [500, 90]], 9, INK);
-  for (const y of [130, 155, 180, 205, 230, 255]) p.stroke([[100, y], [500 - (y % 3) * 40, y]], 6, "#5a5a5a");
-  p.poly(rrect(120, 250, 480, 370, 10), "#e8dcc0", 9); // the envelope, tucked at the bottom
-  p.poly([[120, 250], [300, 330], [480, 250]], "#d9cba8", 8);
-  p.ell(300, 300, 26, 26, "#c0353a", 8); // red wax seal
-  p.ell(300, 300, 12, 12, "#8a2028", 0);
+  // letterhead band + emblem + ministry name bars (bars only, no text)
+  p.poly(rrect(80, 55, 520, 95, 6), "#e8d9b0", 8);
+  p.ell(110, 75, 14, 14, "#fbf7ea", 8); // emblem circle
+  p.ell(110, 75, 6, 6, "#8a2028", 0);
+  p.stroke([[140, 68], [300, 68]], 8, INK); // ministry name
+  p.stroke([[140, 84], [260, 84]], 6, "#3a3a3a");
+  p.stroke([[420, 70], [500, 70]], 6, "#5a5a5a"); // file number
+  // address block, right side
+  p.stroke([[380, 122], [520, 122]], 5, "#5a5a5a");
+  p.stroke([[400, 142], [520, 142]], 5, "#5a5a5a");
+  // body lines
+  for (const y of [170, 195, 220, 245, 270]) p.stroke([[100, y], [500 - (y % 3) * 40, y]], 6, "#5a5a5a");
+  // signature flourish + name bar, lower left
+  p.line([[120, 292], [150, 278], [180, 296], [210, 282], [240, 294], [270, 288]], INK, 6);
+  p.stroke([[120, 312], [250, 312]], 5, "#3a3a3a");
+  // round red stamp, lower right (two rings + two bars)
+  p.arc(470, 292, 32, 32, 0, 360, 8, "#8a2028");
+  p.arc(470, 292, 20, 20, 0, 360, 5, "#8a2028");
+  p.stroke([[452, 286], [488, 286]], 5, "#8a2028");
+  p.stroke([[454, 300], [486, 300]], 5, "#8a2028");
+  // the envelope, tucked at the very bottom, wax-sealed
+  p.poly(rrect(140, 320, 460, 385, 8), "#e8dcc0", 9);
+  p.poly([[140, 320], [300, 370], [460, 320]], "#d9cba8", 8);
+  // fold creases: the envelope's side folds meet at the wax seal (Hairline Fig: lines say what the object is)
+  p.stroke([[140, 385], [300, 352]], 5, "#b8a67e");
+  p.stroke([[460, 385], [300, 352]], 5, "#b8a67e");
+  p.ell(300, 352, 20, 20, "#c0353a", 8); // red wax seal
+  p.ell(300, 352, 9, 9, "#8a2028", 0);
 };
 
-/** a stack of banknotes and coins on a 600 x 400 canvas: green notes, gold coins, paper band */
+/** a stack of banknotes and coins on a 600 x 400 canvas: four green notes, corner rosettes,
+ *  gold paper band with a red seal dot, seven scattered gold coins (anatomy Fig 3) */
 export const fxMoney = (p: Pen) => {
-  for (let i = 0; i < 3; i++) {
-    const y = 230 - i * 34;
-    p.poly(rrect(120, y, 480, y + 30, 8), i === 1 ? "#7ab06a" : "#8fc47e", 9);
+  for (let i = 0; i < 4; i++) {
+    const y = 230 - i * 30;
+    p.poly(rrect(120, y, 480, y + 30, 8), i % 2 ? "#7ab06a" : "#8fc47e", 9);
     p.ell(300, y + 15, 34, 12, "#5d8f52", 6);
     p.dot(160, y + 15, 8, "#5d8f52"); p.dot(440, y + 15, 8, "#5d8f52");
   }
-  p.poly(rrect(280, 120, 320, 232, 6), "#e8c45a", 8); // paper band around the stack
-  for (const [x, y] of [[130, 300], [180, 315], [230, 300], [420, 310], [470, 298]] as const) p.ell(x, y, 26, 12, "#e8c45a", 7);
+  p.poly(rrect(280, 132, 320, 258, 6), "#e8c45a", 8); // paper band around the stack
+  p.dot(300, 195, 8, "#c0353a"); // band seal dot
+  for (const [x, y] of [[130, 300], [180, 315], [230, 300], [280, 322], [360, 325], [420, 310], [470, 298]] as const) p.ell(x, y, 26, 12, "#e8c45a", 7);
 };
 
 /** a grey pigeon pecking on the ground, on a 300 x 200 canvas: plump body, head lowered,
@@ -1180,9 +1225,13 @@ export const fxPigeon = (p: Pen) => {
   p.stroke([[162, 168], [162, 188]], 4, "#c96a3a");
 };
 
-/** a stack of bills seen from ABOVE, on a 600 x 400 canvas: two overlapping green bills
- *  with a darker border and centre seal, plus scattered gold coins */
+/** a stack of bills seen from ABOVE, on a 600 x 400 canvas: three overlapping green bills
+ *  with a darker border and centre seal, a stack of three coins, plus scattered gold coins */
 export const fxMoneyFlat = (p: Pen) => {
+  p.poly(rrect(300, 60, 560, 200, 10), "#5d8f52", 8); // third bill, behind
+  p.poly(rrect(320, 80, 540, 180, 8), "#7ab06a", 8);
+  p.ell(430, 130, 42, 26, "#5d8f52", 6);
+  p.dot(350, 130, 10, "#5d8f52"); p.dot(510, 130, 10, "#5d8f52");
   p.poly(rrect(90, 90, 420, 250, 10), "#5d8f52", 8);
   p.poly(rrect(110, 110, 400, 230, 8), "#8fc47e", 8);
   p.ell(255, 170, 42, 26, "#5d8f52", 6);
@@ -1191,6 +1240,7 @@ export const fxMoneyFlat = (p: Pen) => {
   p.poly(rrect(200, 200, 490, 310, 8), "#7ab06a", 8);
   p.ell(345, 255, 42, 26, "#5d8f52", 6);
   p.dot(230, 255, 10, "#5d8f52"); p.dot(460, 255, 10, "#5d8f52");
+  for (const [x, y] of [[300, 300], [300, 307], [300, 314]] as const) p.ell(x, y, 24, 11, "#e8c45a", 7); // coin stack
   for (const [x, y] of [[120, 300], [170, 320], [450, 330], [500, 300], [540, 330]] as const) p.ell(x, y, 24, 11, "#e8c45a", 7);
 };
 

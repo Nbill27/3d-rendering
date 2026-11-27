@@ -19,19 +19,31 @@ export const STREET_X = 0; // the cobbled street south from the plaza
 export const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 export const smooth = (x: number) => { const u = clamp01(x); return u * u * (3 - 2 * u); };
 export const easeOut = (u: number) => 1 - (1 - clamp01(u)) ** 4;
+/** Tahap 5 — motion personality (motion_design): PLAYFUL untuk seluruh video.
+ *  Emosi lucu/tidak percaya: licik dan ringan, bukan slapstick. Signature easing =
+ *  easeOutBack (80% animasi masuk/penekanan, overshoot 10%); perjalanan panjang =
+ *  smooth (ease-in-out); keluar/kabur = easeInQuad (berakselerasi pergi).
+ *  Durasi video (30 fps): cepat 8 f / standar 15 f / lambat 24 f; glide kamera 24-32 f.
+ *  Semua kurva di bawah ini bernilai 0 di u=0 dan 1 di u=1: nilai awal/akhir gerakan
+ *  TIDAK berubah, hanya kurvanya. */
+export const easeInQuad = (u: number) => { const x = clamp01(u); return x * x; };
+export const easeOutBack = (u: number) => { const x = clamp01(u), c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2; };
 
 // ---------------- story motion ----------------
-/** shot 9 (46-52 s): the two policemen walk in through the salon's east door, x -37 -> -42 */
-export const policeX = (t: number) => -37 - 5 * clamp01((t - 46) / 4);
-/** shot 9 (46-52 s): Lustig slips out the west door with his suitcase, x -52 -> -55.5 */
-export const exitX = (t: number) => -52 - 3.5 * clamp01((t - 47) / 3);
-/** shot 1 (0-5 s): Lustig strolls a step toward the camera on the street, z 8 -> 11 */
-export const hookZ = (t: number) => 8 + 3 * clamp01(t / 5);
+/** shot 9 (46-52 s): the two policemen walk in through the salon's east door, x -37 -> -42.
+ *  Tahap 5: smooth — mereka masuk dari diam, melangkah mantap, berhenti di tempat (awal/akhir sama). */
+export const policeX = (t: number) => -37 - 5 * smooth((t - 46) / 4);
+/** shot 9 (46-52 s): Lustig slips out the west door with his suitcase, x -52 -> -55.5.
+ *  Tahap 5: easeInQuad — menyelinap pelan dulu, lalu makin cepat kabur (awal/akhir sama). */
+export const exitX = (t: number) => -52 - 3.5 * easeInQuad((t - 47) / 3);
+/** shot 1 (0-5 s): Lustig strolls a step toward the camera on the street, z 8 -> 11.
+ *  Tahap 5: smooth — mulai dari berdiri, melangkah, mereda (awal/akhir sama). */
+export const hookZ = (t: number) => 8 + 3 * smooth(t / 5);
 
 export type StoryState = { police: number; exit: number };
 export const storyState = (id: number, t: number): StoryState => ({
-  police: id === 9 ? clamp01((t - 46) / 4) : 0,
-  exit: id === 9 ? clamp01((t - 47) / 3) : 0,
+  police: id === 9 ? smooth((t - 46) / 4) : 0,
+  exit: id === 9 ? easeInQuad((t - 47) / 3) : 0,
 });
 
 // ---------------- shots ----------------
@@ -58,7 +70,7 @@ export const shotAt = (f: number) => SHOTS.find((s) => f >= s.a && f < s.b) ?? S
 export const layersAt = (f: number): { id: number; alpha: number }[] => {
   for (const s of SHOTS) {
     const x = XFADE[s.id];
-    if (x && f >= s.a - x / 2 && f < s.a + x / 2) return [{ id: s.id - 1, alpha: 1 }, { id: s.id, alpha: (f - (s.a - x / 2) + 1) / (x + 1) }];
+    if (x && f >= s.a - x / 2 && f < s.a + x / 2) return [{ id: s.id - 1, alpha: 1 }, { id: s.id, alpha: smooth((f - (s.a - x / 2) + 1) / (x + 1)) }]; // tahap 5: dissolve di-smooth, bukan linear
   }
   return [{ id: shotAt(f).id, alpha: 1 }];
 };
@@ -105,51 +117,67 @@ const S1b = (f: number) => { const z = hookZ(f / FPS); return dolly([0, 1.2, 17.
 // S2 cafe: Lustig seated at the Vienna cafe table, newspaper held up in front of him, waiter nearby.
 // Camera high (y ~4) so the sightline clears the 1 m chair backs and the seated men's torsos
 // read instead of hiding behind them; centred on Lustig's table; the patrons' table was moved
-// close to his so the whole terrace fits.
-const S2a = (f: number) => dolly([45, 4.2, 35], [38.5, 1.2, 26.8], pushK(f, 150, 0.002), { fov: 48 });
-const S2b = (f: number) => dolly([44.5, 4.1, 34.5], [38.5, 1.0, 26.8], pushK(f, 240, 0.0025), { fov: 46 });
+// close to his so the whole terrace fits. Tahap 6: Lustig sits on the NORTH side of his table
+// (facing south, toward the camera and the table) so his chair back is behind him, not between
+// him and the camera; the look target panned 0.5 m west so the patron is fully in frame.
+const S2a = (f: number) => dolly([44.4, 4.2, 35], [38.0, 1.1, 26.2], pushK(f, 150, 0.002), { fov: 48 });
+const S2b = (f: number) => dolly([43.9, 4.1, 34.5], [38.0, 1.0, 26.2], pushK(f, 240, 0.0025), { fov: 46 });
 // S3 hotel: the salon, Lustig at the head of the table with the five dealers around it, forged letters on the table.
 // Camera lowered and swung west so Lustig (head of the table) is fully in frame and the
 // ceiling / empty upper wall drop out of the shot.
-const S3a = (f: number) => dolly([-39.5, 2.7, 8], [-47.5, 1.5, 1.5], pushK(f, 330, 0.002), { fov: 42 });
-const S3b = (f: number) => dolly([-40.5, 2.4, 7], [-47, 1.6, 1.5], pushK(f, 420, 0.0025), { fov: 38 });
+const S3a = (f: number) => dolly([-39.5, 2.7, 8], [-47.5, 1.1, 1.5], pushK(f, 330, 0.002), { fov: 42 });
+const S3b = (f: number) => dolly([-40.5, 2.4, 7], [-47, 1.0, 1.5], pushK(f, 420, 0.0025), { fov: 38 });
 // S4 pitch: closer — Lustig pointing at the miniature tower on the table, Poisson leaning in eagerly.
-const S4a = (f: number) => dolly([-40, 2.2, 6.5], [-46, 1.2, 1.5], pushK(f, 510, 0.002), { fov: 38 });
-const S4b = (f: number) => dolly([-41, 2, 5.5], [-46, 1.1, 1.5], pushK(f, 580, 0.0025), { fov: 36 });
+// Tahap 6: camera raised (y 2.2 -> 2.8) and pulled back so the table edge no longer slices
+// Poisson's face, and fov widened so both background dealers fit inside the narrow 9:16 frame.
+// Look target lowered (y 1.2/1.1 -> 0.95/0.85) so Poisson's big foreground grin sits above the
+// caption band instead of under it, and the dealers sit at x -45.8/-45.5 (projected, not guessed:
+// at -45.0/-46.5 they were cut by the right/left frame edges in still2_585).
+const S4a = (f: number) => dolly([-39.5, 2.6, 7.0], [-46.2, 0.95, 1.5], pushK(f, 510, 0.002), { fov: 40 });
+const S4b = (f: number) => dolly([-40.5, 2.4, 6.0], [-46.2, 0.85, 1.5], pushK(f, 580, 0.0025), { fov: 38 });
 // S5 payoff: Poisson hands over the envelope; Lustig pockets the money, sly smile.
-const S5a = (f: number) => dolly([-40, 2.4, 5.5], [-45.8, 1.2, 1.7], pushK(f, 660, 0.002), { fov: 38 });
-const S5b = (f: number) => dolly([-41, 2.2, 4.5], [-45.8, 1.1, 1.7], pushK(f, 750, 0.0025), { fov: 36 });
+// Tahap 6: camera pulled back (Poisson was filling half the frame at 4.5 m) and fov widened
+// so both background dealers fit inside the narrow 9:16 frame.
+const S5a = (f: number) => dolly([-38.5, 2.6, 7.0], [-45.8, 1.2, 1.7], pushK(f, 660, 0.002), { fov: 40 });
+const S5b = (f: number) => dolly([-39.5, 2.4, 6.0], [-45.8, 1.1, 1.7], pushK(f, 750, 0.0025), { fov: 38 });
 // S6 wait: Vienna cafe again, Lustig with a stack of French newspapers, checking for news that never comes.
-// Camera reframe (4th pass): moved to the SOUTHEAST, low-medium height (y ~3), looking northwest at
-// the table, fov 52-54. Why: Lustig faces north, and the flat papers (y 0.82) sit on the table's north
-// side, HIGHER than his seated chin (~0.76 m) — so every camera from the north puts the sightline to
-// his chin THROUGH the paper stack (passes 1-2 hid his mouth, and the high pass went empty;
-// the close north pass was dropped before rendering — it would have cleared the face but lost
-// the awning, and this southeast angle was proven by still_240 to give both).
-// From the southeast he sits on the NEAR side of the table, the papers lie BEHIND him, and his whole
-// face reads clear above them; the striped awning's underside fills the top of frame, exactly as in
-// the approved S2 cafe still (still_240). Varied from S2 by being lower, closer and wider (S2 was
-// y 4.2 / fov 48 from further out).
-const S6a = (f: number) => dolly([43.5, 3.4, 32.5], [38.5, 1.0, 26.8], pushK(f, 840, 0.002), { fov: 54 });
-const S6b = (f: number) => dolly([42.5, 3.1, 31.5], [38.5, 0.95, 26.8], pushK(f, 930, 0.0025), { fov: 52 });
+// Camera from the SOUTHEAST, low-medium height (y ~3), looking northwest at the table, fov 52-54.
+// Tahap 6: Lustig now sits on the NORTH side of his table (facing the camera, chair back behind
+// him), so the flat papers lie on the table in front of him and the sightline to his chin passes
+// above them — his nervous face reads clear. Look target panned 0.5 m west so the patron is in frame.
+const S6a = (f: number) => dolly([42.9, 3.4, 32.5], [38.0, 1.0, 26.2], pushK(f, 840, 0.002), { fov: 54 });
+const S6b = (f: number) => dolly([41.9, 3.1, 31.5], [38.0, 0.95, 26.2], pushK(f, 930, 0.0025), { fov: 52 });
 // S7 Poisson alone: the street under the tower, Poisson head down, embarrassed, tower looming behind him.
 // Camera pulled far back down the street and wide (fov 55-58) so the FULL tower (base, both
 // decks, spire tip) fits behind him, with Poisson small in the lower frame, clear of the subtitle.
 // Same dolly note as S1: pushK rate 0, the slow 2 m drift over each key keeps the shot
 // creeping instead of a static hold.
-const S7a = (f: number) => dolly([0, 2, 5 - 2 * clamp01((f - 1020) / 90)], [0, 27, -60], pushK(f, 1020, 0), { fov: 55 });
-const S7b = (f: number) => dolly([0, 1.9, 0 - 2 * clamp01((f - 1110) / 90)], [0, 25, -60], pushK(f, 1110, 0), { fov: 58 });
-// S8 return: the salon again from the west side — Lustig with fresh letters, five NEW dealers.
-const S8a = (f: number) => dolly([-53, 2.6, 8], [-46, 1.4, 1], pushK(f, 1200, 0.002), { fov: 42 });
-const S8b = (f: number) => dolly([-51, 2.2, 6], [-46, 1.3, 1.5], pushK(f, 1290, 0.0025), { fov: 38 });
-// S9 police: wide view of the salon — policemen walk in through the east door, dealers react, Lustig slips out west.
-const S9a = (f: number) => dolly([-40, 2.8, -3], [-46, 1.4, 2], pushK(f, 1380, 0.002), { fov: 44 });
-const S9b = (f: number) => dolly([-42, 2.4, -2], [-47, 1.3, 1.5], pushK(f, 1470, 0.002), { fov: 40 });
+const S7a = (f: number) => dolly([0, 2, 5 - 2 * smooth((f - 1020) / 90)], [0, 27, -60], pushK(f, 1020, 0), { fov: 55 });
+const S7b = (f: number) => dolly([0, 1.9, 0 - 2 * smooth((f - 1110) / 90)], [0, 25, -60], pushK(f, 1110, 0), { fov: 58 });
+// S8 return: the salon again — Lustig with fresh letters, five NEW dealers.
+// Tahap 6: the west-side camera is GONE (it put Lustig, who stands at the table's west end,
+// beside/behind the camera, so he was entirely out of frame in still2_1290, and the frame was
+// half blank south wall). Same southeast view as shot 3 (same trick, new dealers), slightly
+// higher and further back with a wider fov so all five new dealers fit.
+const S8a = (f: number) => dolly([-39, 3.0, 8.5], [-47.5, 1.4, 1.5], pushK(f, 1200, 0.002), { fov: 44 });
+const S8b = (f: number) => dolly([-40, 2.7, 7.5], [-47, 1.5, 1.5], pushK(f, 1290, 0.0025), { fov: 40 });
+// S9 police: two shots in one, joined by a HARD CUT at f1470 (the room is 18 m wide and the
+// action spans it end to end — no single 9:16 camera inside the room can show the east door,
+// the table and the west door at once, proven by still2_1440/1470 where the police were only
+// a sliver at the frame edge and Lustig was behind the camera).
+// S9a (f1380-1470): from the north, looking southeast at the police walking in through the
+// east door, one shocked dealer in the foreground. S9b (f1470-1560, CUT): from the southeast,
+// looking west at Lustig slipping out the lit west door with his suitcase.
+const S9a = (f: number) => dolly([-44, 3.0, -1], [-40.5, 1.3, 4], pushK(f, 1380, 0.002), { fov: 44 });
+const S9b = (f: number) => dolly([-47.5, 3.0, 4], [-54, 1.2, -2], pushK(f, 1470, 0.002), { fov: 44 });
 // S10 sunset: the tower standing majestic at golden hour, plaza below, Lustig gone.
 // Look target raised so the spire tip (which was cropped at the top edge) fits inside the frame.
+// Tahap 6: the old S10b drift ran the camera EAST into the Haussmann building at (18, 40) —
+// still2_1680 was a purple blur for the whole second half of the shot. The drift now stays
+// on the east sidewalk (x <= 11), moving south along the street instead of east into the facades.
 // Same dolly note as S1: pushK rate 0, the slow lateral drift keeps the shot creeping.
-const S10a = (f: number) => dolly([12 + 2 * clamp01((f - 1560) / 120), 3, 30 + 3 * clamp01((f - 1560) / 120)], [0, 30, -60], pushK(f, 1560, 0), { fov: 44 });
-const S10b = (f: number) => dolly([16 + 2 * clamp01((f - 1680) / 120), 6, 42 + 3 * clamp01((f - 1680) / 120)], [0, 27, -60], pushK(f, 1680, 0), { fov: 46 });
+const S10a = (f: number) => dolly([11 + 1 * smooth((f - 1560) / 120), 3, 30 + 2 * smooth((f - 1560) / 120)], [0, 30, -60], pushK(f, 1560, 0), { fov: 44 });
+const S10b = (f: number) => dolly([10 + 1 * smooth((f - 1680) / 120), 5, 43 + 2 * smooth((f - 1680) / 120)], [0, 27, -60], pushK(f, 1680, 0), { fov: 46 });
 
 const CAMS: Record<number, Key[]> = {
   1: [
@@ -186,7 +214,7 @@ const CAMS: Record<number, Key[]> = {
   ],
   9: [
     { f: 1380, s: S9a },
-    { f: 1470, dur: 24, s: S9b },
+    { f: 1470, dur: 24, cut: true, s: S9b },
   ],
   10: [
     { f: 1560, s: S10a },
@@ -224,7 +252,7 @@ export const DOF: Dof[] = [
   { f: 0, cInf: 0 },
   { f: 72, dur: 32, cInf: 10, focus: (f) => [0, 1.6, hookZ(f / FPS)] },
   { f: 150, cInf: 0 },
-  { f: 240, dur: 24, cInf: 10, focus: () => [38.5, 1.2, 26] },
+  { f: 240, dur: 24, cInf: 10, focus: () => [38.5, 1.1, 25.5] }, // Tahap 6: Lustig sits on the table's north side now
   { f: 330, cInf: 0 },
   { f: 420, dur: 24, cInf: 12, focus: () => [-46, 1.4, 1] },
   { f: 510, cInf: 0 },
@@ -232,19 +260,19 @@ export const DOF: Dof[] = [
   { f: 660, cInf: 0 },
   { f: 750, dur: 24, cInf: 8, focus: () => [-45.8, 1.2, 1.2] },
   { f: 840, cInf: 0 },
-  { f: 930, dur: 24, cInf: 10, focus: () => [39, 1.2, 26] },
+  { f: 930, dur: 24, cInf: 10, focus: () => [38.5, 1.1, 25.5] }, // Tahap 6: Lustig sits on the table's north side now
   { f: 1020, cInf: 0 },
   { f: 1110, dur: 24, cInf: 10, focus: (f) => [0, 1.6, -15] },
   { f: 1200, cInf: 0 },
   { f: 1290, dur: 24, cInf: 12, focus: () => [-46, 1.4, 1] },
   { f: 1380, cInf: 0 },
-  { f: 1470, dur: 24, cInf: 10, focus: () => [-46, 1.4, 1.5] },
+  { f: 1470, dur: 24, cInf: 10, focus: () => [-54, 1.2, -2] }, // Tahap 6: the f1470 CUT looks west at Lustig fleeing through the west door
   { f: 1560, cInf: 0 },
 ];
 export const dofAt = (f: number) => {
   let i = 0; while (i + 1 < DOF.length && f >= DOF[i + 1].f) i++;
   const d = DOF[i], p = DOF[Math.max(0, i - 1)];
-  const k = d.dur ? Math.min(1, (f - d.f) / d.dur) : 1;
+  const k = d.dur ? smooth((f - d.f) / d.dur) : 1; // tahap 5: tarikan fokus di-smooth, bukan linear
   return { cInf: p.cInf + (d.cInf - p.cInf) * k, focus: d.focus };
 };
 export const focusAt = (id: number, f: number): V3 => {
