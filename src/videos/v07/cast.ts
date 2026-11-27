@@ -14,7 +14,7 @@ import {
 import {
   FPS, D0, SHOTS,
   hookZ, policeX, exitX, StoryState,
-  clamp01, easeOutBack,
+  clamp01, easeOutBack, smooth,
 } from "./story";
 import { NOINK } from "./ink";
 import { cardShade, blobMaterial, CARD_K } from "./cardshade";
@@ -221,7 +221,11 @@ const blob = (out: Stage, x: number, y: number, z: number, sc = 1, k = 1) => {
 // ---------------- props (effect cards) ----------------
 /** a newspaper lying flat on a table (600 x 400 drawing, feet at canvas bottom) */
 const newspaper = (out: Stage, x: number, z: number, rot = 0) => {
-  out.fx.push({ key: "paper", cw: 600, ch: 400, draw: (p) => fxNewspaper(p), x, y: 0.82, z, w: 0.85, h: 0.57, flat: true, rot });
+  // v3.2 (27 Nov 2026): koran diperkecil (0.85x0.57 -> 0.7x0.45) dan diletakkan
+  // di sisi selatan meja (z lebih besar, menjauhi Lustig). Koran lama yang
+  // lebar dan menjangkau sampai z 25.5 menutupi dada Lustig dari kamera
+  // rendah — di still v3_300 koran menempel di dagunya dan torsonya hilang.
+  out.fx.push({ key: "paper", cw: 600, ch: 400, draw: (p) => fxNewspaper(p), x, y: 0.82, z, w: 0.7, h: 0.45, flat: true, rot });
 };
 /** a forged letter lying flat on a table — Tahap 6: y 0.885, just above the salon table top (0.85)
  *  and runner (0.87); at the old y 0.82 the card sat INSIDE the table box and never showed. */
@@ -325,17 +329,20 @@ const hookCrowd = (t: number, cam: CamInfo, out: Stage) => {
  *  face: only 0.35 m of him is above the 0.75 m table, the card is 0.48 m tall). The patron moved
  *  to the north side of his table too, and 0.4 m east, so he is fully in frame. */
 const cafeCrowd = (t: number, cam: CamInfo, out: Stage) => {
-  out.places.push(person(cam, lustig(), 38.5, D0, 25.2, { side: false, mirror: false },
-    { mode: "sit", expr: "neutral", blink: lidAt(t, 700), look: 0 }, {}, 0.92));
+  // Putaran 4 (27 Nov, referensi duduk bill): Lustig + patron duduk SIDE VIEW
+  // (mirror=true: menghadap meja di selatan, profile menghadap kiri layar dari
+  // kamera tenggara). Front view tidak pernah bisa menunjukkan paha horizontal.
+  out.places.push(person(cam, lustig(), 38.5, D0, 25.2, { side: true, mirror: true },
+    { mode: "sit", expr: "neutral", blink: lidAt(t, 700), look: 0 }, { mode: "sit", expr: "neutral", blink: lidAt(t, 700), hipY: 744 }, 0.92));
   blob(out, 38.5, D0, 25.2, 0.92);
-  newspaper(out, 38.5, 25.8, 0.2);
-  newspaper(out, 38.6, 26.1, -0.15);
-  cup(out, 38.9, 26.3);
+  newspaper(out, 38.3, 26.75, 0.2);
+  newspaper(out, 38.5, 26.9, -0.15);
+  cup(out, 38.9, 26.8);
   out.places.push(person(cam, waiter(), 36.2, D0, 24.5, { side: false, mirror: false },
     { mode: "stand", expr: "neutral", blink: lidAt(t, 740), look: 0 }, {}));
   blob(out, 36.2, D0, 24.5);
-  out.places.push(person(cam, passer(2), 37.8, D0, 27.4, { side: false, mirror: false },
-    { mode: "sit", expr: "smile", blink: lidAt(t, 762), look: 0 }, {}));
+  out.places.push(person(cam, passer(2), 37.8, D0, 27.4, { side: true, mirror: true },
+    { mode: "sit", expr: "smile", blink: lidAt(t, 762), look: 0 }, { mode: "sit", expr: "smile", blink: lidAt(t, 762), hipY: 762 }));
   blob(out, 37.8, D0, 27.4);
   cup(out, 37.6, 28.0);
 };
@@ -358,17 +365,17 @@ const hotelCrowd = (t: number, cam: CamInfo, out: Stage) => {
   // tower, v1 just east of it), and the third sits on the NEAR side between the other two
   // (v2 at x -46.0, clear of the tower, the letters and the caption). The earlier layout put v1
   // behind the tower lattice and v2 off the right edge entirely (still2_420).
-  // Putaran 3 (27 Nov, referensi duduk bill): dudukan + bantal di world.ts kini
-  // di tinggi pinggul sitter (bantal atas 0,43 m = hipY) dan tepi depannya 0,06-0,08 m
-  // DI BELAKANG bidang kartu — tidak ada lagi yang menutupi paha. Paha di toon.ts kini
-  // segmen tebal horizontal sampai lutut di 62u (di luar siluet torso), betis vertikal.
-  // Hanya sitter sisi DEKAT yang duduk di kursi ini; sisi jauh (z 0,9) tersembunyi
-  // di balik meja.
+  // Putaran 4 (27 Nov, referensi duduk bill + referensi hotel GPT): semua dealer
+  // duduk SIDE VIEW, berhadapan di kedua sisi meja seperti referensi — sisi
+  // utara (z 0,9) mirror=true (menghadap selatan/meja, profile ke kiri layar),
+  // sisi selatan (z 3,1) mirror=false (menghadap utara/meja, profile ke kanan).
+  // Paha horizontal di bodySide "sit"; kursi di world.ts menghadap meja.
   const seats: [number, number, number][] = [[-48.0, 0.9, 0], [-46.4, 0.9, 1], [-47.5, 3.1, 3], [-45.7, 3.1, 2], [-44.5, 3.1, 4]];
   seats.forEach(([x, z, v]) => {
     const who = v === 4 ? poisson() : dealerWho(v);
-    out.places.push(person(cam, who, x, D0, z, { side: false, mirror: false },
-      { mode: "sit", expr: v === 4 ? "grin" : v === 1 ? "neutral" : "smile", blink: lidAt(t, 720 + v), look: 0 }, {}));
+    out.places.push(person(cam, who, x, D0, z, { side: true, mirror: z < 2 },
+      { mode: "sit", expr: v === 4 ? "grin" : v === 1 ? "neutral" : "smile", blink: lidAt(t, 720 + v), look: 0 },
+      { mode: "sit", expr: v === 4 ? "grin" : v === 1 ? "neutral" : "smile", blink: lidAt(t, 720 + v) }));
     blob(out, x, D0, z);
   });
   letterUp(out, -48.8, 1.4, raiseU(t, 12.2)); // Tahap 5: terangkat f366-384, saat L3 "forged government letters"
@@ -389,19 +396,16 @@ const pitchCrowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, lustig(), -46.8, D0, 1, { side: false, mirror: false },
     { mode: "stand", expr: "grin", blink: lidAt(t, 700), wave: 0.7 + 0.15 * Math.sin(t * 2.4), look: 0 }, {}, 0.92));
   blob(out, -46.8, D0, 1, 0.92);
-  // Perbaikan 27 Nov: all three sitters sit ON the salon chairs now (Poisson on the
-  // (-44.5, 3.1) chair, dealerWho(0) on the (-45.8, 0.9) chair, dealerWho(2) on the
-  // (-45.7, 3.1) chair) — before, they sat 0.3-0.7 m off the chairs and read as standing.
-  // Putaran 2b: kursi di-yaw menghadap kamera dan kartu kembali ke tengah kursi (lihat
-  // hotelCrowd); offset tepi-depan putaran 2a dicabut.
-  out.places.push(person(cam, poisson(), -44.5, D0, 3.1, { side: false, mirror: false },
-    { mode: "sit", expr: "grin", blink: lidAt(t, 710), look: 0 }, {}));
+  // Putaran 4: ketiga sitter SIDE VIEW (Poisson + dealerWho(2) di sisi selatan
+  // mirror=false, dealerWho(0) di sisi utara mirror=true), seperti hotelCrowd.
+  out.places.push(person(cam, poisson(), -44.5, D0, 3.1, { side: true, mirror: false },
+    { mode: "sit", expr: "grin", blink: lidAt(t, 710), look: 0 }, { mode: "sit", expr: "grin", blink: lidAt(t, 710) }));
   blob(out, -44.5, D0, 3.1);
-  out.places.push(person(cam, dealerWho(0), -45.8, D0, 0.9, { side: false, mirror: false },
-    { mode: "sit", expr: "neutral", blink: lidAt(t, 720), look: 0 }, {}));
+  out.places.push(person(cam, dealerWho(0), -45.8, D0, 0.9, { side: true, mirror: true },
+    { mode: "sit", expr: "neutral", blink: lidAt(t, 720), look: 0 }, { mode: "sit", expr: "neutral", blink: lidAt(t, 720) }));
   blob(out, -45.8, D0, 0.9);
-  out.places.push(person(cam, dealerWho(2), -45.7, D0, 3.1, { side: false, mirror: false },
-    { mode: "sit", expr: "smile", blink: lidAt(t, 722), look: 0 }, {}));
+  out.places.push(person(cam, dealerWho(2), -45.7, D0, 3.1, { side: true, mirror: false },
+    { mode: "sit", expr: "smile", blink: lidAt(t, 722), look: 0 }, { mode: "sit", expr: "smile", blink: lidAt(t, 722) }));
   blob(out, -45.7, D0, 3.1);
   letterUp(out, -47.8, 0.9, raiseU(t, 18.2)); // Tahap 5: terangkat f546-564, saat L4 "He told them..."
   letter(out, -46.2, 1.9, 0.3);
@@ -415,22 +419,18 @@ const payoffCrowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, lustig(), -46.2, D0, 1.2, { side: false, mirror: false },
     { mode: "stand", expr: "grin", blink: lidAt(t, 700), look: 0 }, {}, 0.92));
   blob(out, -46.2, D0, 1.2, 0.92);
-  // Perbaikan 27 Nov: the three dealers SIT at the table now (they stood next to empty
-  // chairs before, which read as "should be sitting but isn't"). Poisson on the
-  // (-44.5, 3.1) chair, dealerWho(1) on the (-45.2, 0.9) chair, dealerWho(3) on the
-  // (-45.7, 3.1) chair. The handover money drops to y 1.0 — seated hand height.
-  // Putaran 2b: kartu kembali ke tengah kursi (lihat hotelCrowd); uang kembali ke koordinat
-  // semula (tangan Poisson -> titik tengah).
-  out.places.push(person(cam, poisson(), -44.5, D0, 3.1, { side: false, mirror: false },
-    { mode: "sit", expr: "smile", blink: lidAt(t, 710), look: 0 }, {}));
+  // Putaran 4: ketiga dealer SIDE VIEW (Poisson + dealerWho(3) di sisi selatan
+  // mirror=false, dealerWho(1) di sisi utara mirror=true), seperti hotelCrowd.
+  out.places.push(person(cam, poisson(), -44.5, D0, 3.1, { side: true, mirror: false },
+    { mode: "sit", expr: "smile", blink: lidAt(t, 710), look: 0 }, { mode: "sit", expr: "smile", blink: lidAt(t, 710) }));
   blob(out, -44.5, D0, 3.1);
   money(out, -45.25, 2.1, [-44.5, 2.8], handOverU(t), 1.0); // Tahap 5: tangan Poisson -> titik tengah, f774-819
   moneyFlat(out, -44.6, 2.4, 0.3); // one small stack on Poisson's side; the second stack that covered Lustig is gone
-  out.places.push(person(cam, dealerWho(1), -45.2, D0, 0.9, { side: false, mirror: false },
-    { mode: "sit", expr: "neutral", blink: lidAt(t, 721), look: 0 }, {}));
+  out.places.push(person(cam, dealerWho(1), -45.2, D0, 0.9, { side: true, mirror: true },
+    { mode: "sit", expr: "neutral", blink: lidAt(t, 721), look: 0 }, { mode: "sit", expr: "neutral", blink: lidAt(t, 721) }));
   blob(out, -45.2, D0, 0.9);
-  out.places.push(person(cam, dealerWho(3), -45.7, D0, 3.1, { side: false, mirror: false },
-    { mode: "sit", expr: "neutral", blink: lidAt(t, 723), look: 0 }, {}));
+  out.places.push(person(cam, dealerWho(3), -45.7, D0, 3.1, { side: true, mirror: false },
+    { mode: "sit", expr: "neutral", blink: lidAt(t, 723), look: 0 }, { mode: "sit", expr: "neutral", blink: lidAt(t, 723) }));
   blob(out, -45.7, D0, 3.1);
 };
 
@@ -440,18 +440,20 @@ const payoffCrowd = (t: number, cam: CamInfo, out: Stage) => {
  *  moved to the table's north half in front of him and tightened so none spills past the table edge
  *  (in still_960 one sheet stuck out like a paper plane); the patron moved to his table's north side. */
 const waitCrowd = (t: number, cam: CamInfo, out: Stage) => {
-  out.places.push(person(cam, lustig(), 38.5, D0, 25.2, { side: false, mirror: false },
-    { mode: "sit", expr: "nervous", blink: lidAt(t, 700), look: 0 }, {}, 0.92));
+  // Putaran 4: sama seperti cafeCrowd — Lustig + patron SIDE VIEW, mirror=true.
+  // hipY Lustig 744 (kursi kafe 0,46 m, skala 0,92), patron 762 (skala 1,0).
+  out.places.push(person(cam, lustig(), 38.5, D0, 25.2, { side: true, mirror: true },
+    { mode: "sit", expr: "nervous", blink: lidAt(t, 700), look: 0 }, { mode: "sit", expr: "nervous", blink: lidAt(t, 700), hipY: 744 }, 0.92));
   blob(out, 38.5, D0, 25.2, 0.92);
-  newspaper(out, 38.3, 25.7, 0.1);
-  newspaper(out, 38.7, 25.8, -0.2);
-  newspaper(out, 38.5, 26.0, 0.3);
-  cup(out, 39.0, 26.2);
+  newspaper(out, 38.3, 26.7, 0.1);
+  newspaper(out, 38.7, 26.8, -0.2);
+  newspaper(out, 38.5, 26.9, 0.3);
+  cup(out, 39.0, 26.7);
   out.places.push(person(cam, waiter(), 36.2, D0, 24.5, { side: false, mirror: false },
     { mode: "stand", expr: "neutral", blink: lidAt(t, 740), look: 0 }, {}));
   blob(out, 36.2, D0, 24.5);
-  out.places.push(person(cam, passer(2), 37.8, D0, 27.4, { side: false, mirror: false },
-    { mode: "sit", expr: "neutral", blink: lidAt(t, 762), look: 0 }, {}));
+  out.places.push(person(cam, passer(2), 37.8, D0, 27.4, { side: true, mirror: true },
+    { mode: "sit", expr: "neutral", blink: lidAt(t, 762), look: 0 }, { mode: "sit", expr: "neutral", blink: lidAt(t, 762), hipY: 762 }));
   blob(out, 37.8, D0, 27.4);
   cup(out, 37.6, 28.0);
 };
@@ -490,13 +492,13 @@ const returnCrowd = (t: number, cam: CamInfo, out: Stage) => {
   out.places.push(person(cam, lustig(), -49.5, D0, 1.2, { side: false, mirror: false },
     { mode: "stand", expr: "grin", blink: lidAt(t, 700), wave: 0.5 + 0.2 * Math.sin(t * 2), look: 0 }, {}, 0.92));
   blob(out, -49.5, D0, 1.2, 0.92);
-  // Tahap 6: same layout C as shot 3 (see hotelCrowd) — two dealers on the far side, three on
-  // the near side, all five heads inside the frame and clear of the miniature tower.
-  // Putaran 2b: kartu kembali ke tengah kursi (lihat hotelCrowd).
+  // Putaran 4: sama seperti hotelCrowd — semua dealer SIDE VIEW, sisi utara
+  // (z 0,9) mirror=true, sisi selatan (z 3,1) mirror=false.
   const seats: [number, number, number][] = [[-48.0, 0.9, 5], [-46.4, 0.9, 6], [-47.5, 3.1, 8], [-45.7, 3.1, 7], [-44.5, 3.1, 9]];
   seats.forEach(([x, z, v]) => {
-    out.places.push(person(cam, dealerWho(v), x, D0, z, { side: false, mirror: false },
-      { mode: "sit", expr: v === 7 ? "grin" : v === 5 ? "neutral" : "smile", blink: lidAt(t, 720 + v), look: 0 }, {}));
+    out.places.push(person(cam, dealerWho(v), x, D0, z, { side: true, mirror: z < 2 },
+      { mode: "sit", expr: v === 7 ? "grin" : v === 5 ? "neutral" : "smile", blink: lidAt(t, 720 + v), look: 0 },
+      { mode: "sit", expr: v === 7 ? "grin" : v === 5 ? "neutral" : "smile", blink: lidAt(t, 720 + v) }));
     blob(out, x, D0, z);
   });
   letterUp(out, -48.8, 1.4, raiseU(t, 41.2)); // Tahap 5: terangkat f1236-1254, saat L8 "exact same trick"
@@ -538,8 +540,20 @@ const policeCrowd = (t: number, cam: CamInfo, out: Stage) => {
 };
 
 /** the sunset (crowd "sunset", shot 10, golden): the tower standing majestic over the plaza,
- *  a few distant pedestrians for scale — Lustig is gone */
+ *  a few distant pedestrians for scale — and Lustig walking away down the street toward it.
+ *  v3 (27 Nov 2026, bill): di v2 Lustig cuma titik kecil yang tidak terbaca.
+ *  Sekarang dia berjalan MENJAUH di tengah jalan (x 0, z -8 -> -20 selama
+ *  t 52-60 detik, smooth), side-view march: kaki kanan lalu kiri bergantian
+ *  mengangkat ke atas, badan maju ke depan, tanpa goyang kiri-kanan (aturan
+ *  jalan bill 27 Nov). Kamera S10 yang baru menempatkannya di sepertiga
+ *  bawah frame, besar di awal lalu mengecil sambil menjauh. */
 const sunsetCrowd = (t: number, cam: CamInfo, out: Stage) => {
+  const lz = -8 - 12 * smooth((t - 52) / 8);
+  const vl = viewOf(cam, 0, lz, 0, -1);
+  out.places.push(person(cam, lustig(), 0, D0, lz, vl,
+    { mode: "stroll", phase: (t * 0.9) % 1, expr: "relief", blink: lidAt(t, 700) },
+    { mode: "march", phase: (t * 0.9) % 1, expr: "relief", blink: lidAt(t, 700) }, 0.92));
+  blob(out, 0, D0, lz, 0.92);
   const walkers: [number, number, number, number][] = [[-10, -20, 0, 1], [6, -25, 1, -1], [-4, -42, 2, 1], [12, -34, 3, -1]];
   walkers.forEach(([x, z, v, dz]) => {
     const vw = viewOf(cam, x, z, 0, dz);

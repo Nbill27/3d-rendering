@@ -10,12 +10,13 @@
 // Place changes crossfade by stacking a second canvas for the fade frames; the hook ends on a 4-frame white flash.
 import React, { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
-import { AbsoluteFill, continueRender, delayRender, getInputProps, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Img, continueRender, delayRender, getInputProps, staticFile, useCurrentFrame } from "remotion";
 import { ThreeCanvas } from "@remotion/three";
 import { useThree } from "@react-three/fiber";
 import { EffectComposer } from "@react-three/postprocessing";
 import { BlendFunction, BloomEffect, ToneMappingEffect, ToneMappingMode } from "postprocessing";
 import { World, loadKit } from "./world";
+import { MapOverlay } from "./map";
 import { InkPass, noInkFallback } from "./ink";
 import { LensBlur, GrainEffect } from "./lensblur";
 import { GradeEffect, GRADES, GRADE_STRENGTH, gradeFor } from "./grade";
@@ -143,9 +144,49 @@ export const Video07: React.FC = () => {
   const cap = captionAt(f / FPS);
   return (
     <AbsoluteFill style={{ background: "#cfe3f2" }}>
-      {layersAt(f).map((l, i) => <ShotView key={i ? "over" : "base"} id={l.id} kit={kit} alpha={l.alpha} />)}
+      {/* f150-240 is the Paris map (2D overlay): the 3D cafe is not rendered under it */}
+      {f >= 150 && f < 240 ? null : layersAt(f).map((l, i) => <ShotView key={i ? "over" : "base"} id={l.id} kit={kit} alpha={l.alpha} />)}
+      <MapOverlay />
+      <YearPlaceLabel />
+      <PhotoFrame />
       {flash > 0 && <AbsoluteFill style={{ background: "#ffffff", opacity: flash }} />}
       {cap && <CaptionOverlay text={cap} />}
+    </AbsoluteFill>
+  );
+};
+
+/** year + place label, top of frame, hook only (f0-200, during L1).
+ *  Same white-bold/black-outline style as the captions, but at the top so it
+ *  never collides with the burned-in subtitle at the bottom. */
+const YearPlaceLabel: React.FC = () => {
+  const f = useCurrentFrame();
+  if (f >= 200) return null;
+  const opacity = Math.min(1, f / 8, (200 - f) / 8);
+  return (
+    <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", pointerEvents: "none", opacity }}>
+      <div style={{ marginTop: 120, fontSize: 54, ...CAPTION_BASE }}>1925, Paris</div>
+    </AbsoluteFill>
+  );
+};
+
+/** closing frame: the real Eiffel Tower at night in 1925, with the illuminated
+ *  Citroën sign (public domain, anonymous, 1925, via Wikimedia Commons:
+ *  File:Tour Eiffel publicité Citroën 1925.jpg). Shown f1680-1800, after the
+ *  voice ends at 52.28 s. The photo is portrait 967x1400, shown contained
+ *  at its own aspect ratio, never stretched. */
+const PhotoFrame: React.FC = () => {
+  const f = useCurrentFrame();
+  if (f < 1680) return null;
+  const opacity = Math.min(1, (f - 1680) / 8);
+  return (
+    <AbsoluteFill style={{ background: "#1a1410", justifyContent: "center", alignItems: "center", opacity, pointerEvents: "none" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{ border: "6px solid #f2e6c4", lineHeight: 0 }}>
+          <Img src={staticFile("lustig-eiffel-1925.jpg")} style={{ width: 780, height: 1129, objectFit: "contain" }} />
+        </div>
+        <div style={{ marginTop: 36, fontSize: 44, ...CAPTION_BASE }}>The real Eiffel Tower at night, Paris, 1925</div>
+        <div style={{ marginTop: 14, fontSize: 26, ...CAPTION_BASE, fontWeight: 600 }}>Photo: anonymous, 1925. Public domain, via Wikimedia Commons.</div>
+      </div>
     </AbsoluteFill>
   );
 };

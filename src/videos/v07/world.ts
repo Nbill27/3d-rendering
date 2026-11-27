@@ -408,8 +408,11 @@ export class World {
     // depan 0,06 m di belakang kartu. Kursi seluruhnya di belakang bidang kartu, jadi
     // tidak ada lagi yang menutupi paha/lutut/betis. Kaki depan digeser ke -0,12 supaya
     // tetap di bawah dudukan; sandaran turun mengikuti (mulai 0,43 m).
-    const CHAIR_YAW = 0.89; // menghadap kamera salon (tenggara): sin/cos ~ (0,78, 0,63)
-    for (const [cx, cz, yaw] of [[-48.0, 0.9, CHAIR_YAW], [-46.5, 0.9, CHAIR_YAW], [-45.8, 0.9, CHAIR_YAW], [-45.2, 0.9, CHAIR_YAW], [-47.5, 3.1, CHAIR_YAW], [-45.7, 3.1, CHAIR_YAW], [-44.5, 3.1, CHAIR_YAW], [-49.8, 2, Math.PI / 2]] as const) {
+    // Putaran 4 (27 Nov, referensi hotel GPT): kursi menghadap MEJA, bukan kamera
+    // — sisi utara (z 0,9) yaw 0 (menghadap selatan), sisi selatan (z 3,1) yaw PI
+    // (menghadap utara), supaya sandaran tepat di belakang sitter dan dudukan di
+    // bawah pinggulnya. Kursi di (-49,8, 2) tetap yaw PI/2 (kursi ujung barat).
+    for (const [cx, cz, yaw] of [[-48.0, 0.9, 0], [-46.5, 0.9, 0], [-45.8, 0.9, 0], [-45.2, 0.9, 0], [-47.5, 3.1, Math.PI], [-45.7, 3.1, Math.PI], [-44.5, 3.1, Math.PI], [-49.8, 2, Math.PI / 2]] as const) {
       const m = new THREE.Matrix4().makeRotationY(yaw).setPosition(cx, 0, cz);
       for (const [lx, lz] of [[-0.2, -0.31], [0.2, -0.31], [-0.2, -0.12], [0.2, -0.12]] as const)
         sb.add(boxGeo(V(lx - 0.035, 0, lz - 0.035), V(lx + 0.035, 0.37, lz + 0.035), 0), S.chair, m); // legs
@@ -484,7 +487,11 @@ export class World {
       cb.add(boxGeo(V(-0.09, 0.51, -0.28), V(-0.03, 0.9, -0.2), 0), C.chair, m); // slats
       cb.add(boxGeo(V(0.03, 0.51, -0.28), V(0.09, 0.9, -0.2), 0), C.chair, m);
     };
-    cafeTable(38.5, 26); cafeTable(37.8, 28.2); cafeTable(43, 23);
+    // v3.3 (27 Nov 2026): Lustig's table moved 0.5 m SOUTH (26 -> 26.5) so there
+    // is a 0.75 m gap between his chest (z 25.2) and the table's far edge
+    // (z 25.95). At the old 0.25 m gap the 0.75 m table hid his whole torso
+    // from the low cafe camera (still v3_300/v3_300b: only his head showed).
+    cafeTable(38.5, 26.5); cafeTable(37.8, 28.2); cafeTable(43, 23);
     // Tahap 6: Lustig's chair moved to the NORTH side of his table (z 24.9, backrest north, facing
     // south to the table) to match his new seat at z 25.2; the patron's chair likewise (z 27.3,
     // facing south to his table at z 28.2) — the old chairs sat south of both men and their
