@@ -1090,7 +1090,13 @@ const Inner: React.FC<{ scene: number; local: number }> = ({ scene, local }) => 
   // Di-ease (bukan linear): ease-in-out sine untuk dolly.
   const easeInOutSine = (v: number) => -(Math.cos(Math.PI * v) - 1) / 2;
   const t = easeInOutSine(Math.min(local / 200, 1));
-  const gx = Math.sin(local * 0.01) * 0.12;
+  // Drift lateral DIHAPUS (gx = 0): Math.sin(local * 0.01) * 0.12 membuat
+  // kamera 3D bergeser kiri-kanan, sehingga latar bergeser melawan
+  // karakter 2D yang diam — terbaca goyang kiri-kanan di detik 5-10
+  // (diukur di final v2: salib gereja geser ~9px kanan sementara badan
+  // karakter geser ~5px kiri, total relatif ~14px selama S2). Dolly-in
+  // (gy/gz) dipertahankan.
+  const gx = 0;
   const gy = -t * 0.25;
   const gz = -t * 0.9;
   cam.position.set(cfg.camPos[0] + gx, cfg.camPos[1] + gy, cfg.camPos[2] + gz);
