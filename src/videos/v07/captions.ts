@@ -17,9 +17,55 @@ export const CAPTIONS: Caption[] = [
   { start: 48.31, end: 52.28, text: "He was never arrested for the Eiffel Tower. And the tower is still standing." },
 ];
 
-/** the caption active at story time t (seconds), or null in the gaps */
+/** Karaoke-style phrases (v3, 27 Nov 2026): bill found the full-line
+ *  captions unreadable on a phone (L2 = 143 chars = 3 lines at 30px).
+ *  Every VO line is split at word boundaries into short phrases (max 35
+ *  chars, 1 line at 46px within 920px). Words are EXACTLY the VO script:
+ *  joining the phrases of a line reproduces the line word for word
+ *  (verified by script). Timings are proportional to character count
+ *  inside the line's measured [start, end]; the gaps between lines
+ *  are unchanged. */
+export type Phrase = { start: number; end: number; text: string };
+export const PHRASES: Phrase[] = [
+  { start: 0.0, end: 1.73, text: "A con man sold the" },
+  { start: 1.73, end: 3.55, text: "Eiffel Tower. Twice." },
+  { start: 3.8, end: 5.28, text: "In May nineteen twenty-five," },
+  { start: 5.28, end: 6.5, text: "Victor Lustig read that" },
+  { start: 6.5, end: 8.04, text: "the Eiffel Tower was rusting," },
+  { start: 8.04, end: 9.36, text: "and the city could barely" },
+  { start: 9.36, end: 10.74, text: "afford to keep it standing." },
+  { start: 10.99, end: 12.83, text: "So he forged government letters" },
+  { start: 12.83, end: 14.49, text: "and invited the five biggest" },
+  { start: 14.49, end: 15.81, text: "scrap dealers in Paris" },
+  { start: 15.81, end: 16.84, text: "to a luxury hotel." },
+  { start: 17.09, end: 18.61, text: "He told them the government" },
+  { start: 18.61, end: 20.57, text: "had decided to tear the tower down," },
+  { start: 20.57, end: 21.87, text: "and seven thousand tons" },
+  { start: 21.87, end: 23.07, text: "of iron were for sale." },
+  { start: 23.67, end: 25.32, text: "The dealers believed him." },
+  { start: 25.32, end: 27.22, text: "He picked one, Andre Poisson," },
+  { start: 27.22, end: 28.43, text: "and took his money." },
+  { start: 28.68, end: 29.99, text: "Then he fled to Austria," },
+  { start: 29.99, end: 30.93, text: "and waited to see" },
+  { start: 30.93, end: 32.6, text: "if anyone would call the police." },
+  { start: 32.85, end: 33.5, text: "Nobody did." },
+  { start: 33.5, end: 35.03, text: "Poisson was too embarrassed" },
+  { start: 35.03, end: 36.28, text: "to admit he had bought" },
+  { start: 36.28, end: 37.2, text: "the Eiffel Tower." },
+  { start: 37.8, end: 39.82, text: "Months later, Lustig came back" },
+  { start: 39.82, end: 41.71, text: "to Paris and tried the exact" },
+  { start: 41.71, end: 43.73, text: "same trick on five new dealers." },
+  { start: 43.98, end: 45.27, text: "But this time, the police" },
+  { start: 45.27, end: 46.67, text: "were tipped off, and he had" },
+  { start: 46.67, end: 47.61, text: "to flee to America." },
+  { start: 48.31, end: 49.46, text: "He was never arrested" },
+  { start: 49.46, end: 50.61, text: "for the Eiffel Tower." },
+  { start: 50.61, end: 52.28, text: "And the tower is still standing." },
+];
+
+/** the phrase active at story time t (seconds), or null in the gaps */
 export const captionAt = (t: number): string | null => {
-  const c = CAPTIONS.find((x) => t >= x.start && t < x.end);
+  const c = PHRASES.find((x) => t >= x.start && t < x.end);
   return c ? c.text : null;
 };
 

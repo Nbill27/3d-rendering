@@ -62,8 +62,14 @@ export const SHOTS: ShotDef[] = [
   { id: 9, a: 1380, b: 1560, light: "warm", crowd: "police", tau: (t) => t },
   { id: 10, a: 1560, b: TOTAL, light: "golden", crowd: "sunset", tau: (t) => t, towns: true },
 ];
-/** crossfades (frames) at place/time changes; a white 4-frame flash after the hook */
-export const XFADE: Record<number, number> = { 2: 8, 3: 8, 6: 8, 7: 8, 8: 8, 10: 8 };
+/** crossfades (frames) at place/time changes; a white 4-frame flash after the hook.
+ *  v3 (27 Nov 2026): SEMUA transisi jadi HARD CUT (XFADE kosong). Dissolve 8
+ *  frame menumpuk dua render 3D yang sama sekali beda secara semi-transparan —
+ *  di frame 1200 (awal shot 8) interior hotel menumpuk di atas eksterior
+ *  menara dan karakternya melayang dengan skala tidak konsisten (ghosting).
+ *  Gaya seri ini memang hard cut; tidak ada lagi dua shot semi-transparan
+ *  bersamaan. */
+export const XFADE: Record<number, number> = {};
 export const FLASH_AT = 130;
 
 export const shotAt = (f: number) => SHOTS.find((s) => f >= s.a && f < s.b) ?? SHOTS[SHOTS.length - 1];
@@ -115,38 +121,48 @@ const dolly = (pos: V3, look: V3, k: number, rest: Partial<Cam> = {}): Shot =>
 const S1a = (f: number) => { const z = hookZ(f / FPS); return dolly([0, 1.2, 18.5 + (z - 8)], [0, 32, -60], pushK(f, 0, 0), { fov: 55 }); };
 const S1b = (f: number) => { const z = hookZ(f / FPS); return dolly([0, 1.2, 17.5 + (z - 8)], [0, 30, -60], pushK(f, 72, 0), { fov: 52 }); };
 // S2 cafe: Lustig seated at the Vienna cafe table, newspaper held up in front of him, waiter nearby.
-// Camera high (y ~4) so the sightline clears the 1 m chair backs and the seated men's torsos
-// read instead of hiding behind them; centred on Lustig's table; the patrons' table was moved
-// close to his so the whole terrace fits. Tahap 6: Lustig sits on the NORTH side of his table
-// (facing south, toward the camera and the table) so his chair back is behind him, not between
-// him and the camera; the look target panned 0.5 m west so the patron is fully in frame.
-const S2a = (f: number) => dolly([44.4, 4.2, 35], [38.0, 1.1, 26.2], pushK(f, 150, 0.002), { fov: 48 });
-const S2b = (f: number) => dolly([43.9, 4.1, 34.5], [38.0, 1.0, 26.2], pushK(f, 240, 0.0025), { fov: 46 });
+// v3 (27 Nov 2026): kamera LAMA terlalu jauh/tinggi (y 4.2, jarak ~10 m) —
+// lantai kosong ~60% frame, karakter kecil, Lustig cuma kepalanya yang kelihatan
+// di balik meja. Kamera baru LEBIH DEKAT (jarak ~6 m) dan RENDAH (y ~2.4) dengan
+// fov lebih sempit, target ke torso Lustig — badan di atas meja harus terbaca.
+// (Frame 150-240 ditutup peta Paris, jadi yang terlihat hanya dari f240.)
+const S2a = (f: number) => dolly([42.5, 2.4, 30.5], [38.3, 1.2, 25.8], pushK(f, 150, 0.002), { fov: 44 });
+const S2b = (f: number) => dolly([42.0, 2.3, 30.0], [38.3, 1.15, 25.8], pushK(f, 240, 0.0025), { fov: 42 });
 // S3 hotel: the salon, Lustig at the head of the table with the five dealers around it, forged letters on the table.
-// Camera lowered and swung west so Lustig (head of the table) is fully in frame and the
-// ceiling / empty upper wall drop out of the shot.
-const S3a = (f: number) => dolly([-39.5, 2.7, 8], [-47.5, 1.1, 1.5], pushK(f, 330, 0.002), { fov: 42 });
-const S3b = (f: number) => dolly([-40.5, 2.4, 7], [-47, 1.0, 1.5], pushK(f, 420, 0.0025), { fov: 38 });
+// Putaran 4 (27 Nov 2026, referensi hotel GPT dari bill): kamera PINDAH ke ujung
+// TIMUR meja (x -40,5, z 5,0) melihat ke BARAT LAUT menyusuri meja — Lustig di
+// ujung jauh menghadap kamera, para dealer profile di kedua sisi meja, dokumen
+// di atas meja, lampu gantung + pintu kuning + lukisan masuk frame. Kamera lama
+// dari tenggara membuat dealer menghadap kamera (front view) sehingga paha
+// tidak pernah terbaca; dengan kamera ini forward dealer = kiri/kanan layar.
+// Putaran 4b (27 Nov): kamera hotel DITARIK MUNDUR (z 5,0 -> 5,8 -> 6,3) dan laju
+// pushK DIPERLAMBAT (a 0,002 -> 0,001, b 0,0025 -> 0,0012) — di still v3sit_585/
+// 1200 kaki sitter terdekat (Poisson/dealer -44,5, 3,1) terpotong di tepi bawah
+// frame. Percobaan menaikkan kamera 0,5 m (y 2,7 -> 3,2) GAGAL: kaki malah makin
+// ke bawah dan lampu gantung keluar frame. Akar masalah kedua: pushK menarik
+// kamera ke arah target bidik sepanjang shot, jadi di akhir shot kamera sudah
+// 1,3 m lebih dekat dari posisi nominal (z 5,8 -> 4,45 di S3) dan kaki makin
+// terpotong — makanya still tengah shot bisa lolos sementara akhir shot gagal.
+// Kamera-b juga dimundurkan ke z 5,8 lalu 6,3 (sama seperti kamera-a): di still
+// v3sit_420 kaki Poisson masih terpotong di S3b (z 5,4), jadi push-in z tidak
+// boleh lebih dekat dari 5,8. Gerakan dolly tersisa dari geser x + fov yang
+// menyempit + drift pushK yang lambat. Target bidik tidak berubah, kecuali
+// S3a/S3b look y 1,1 -> 0,7 supaya lantai lebih masuk frame.
+const S3a = (f: number) => dolly([-40.5, 2.7, 6.3], [-48.5, 0.7, 1.3], pushK(f, 330, 0.001), { fov: 46 });
+const S3b = (f: number) => dolly([-41.0, 2.6, 6.8], [-48.3, 0.7, 1.4], pushK(f, 420, 0.0012), { fov: 44 });
 // S4 pitch: closer — Lustig pointing at the miniature tower on the table, Poisson leaning in eagerly.
-// Tahap 6: camera raised (y 2.2 -> 2.8) and pulled back so the table edge no longer slices
-// Poisson's face, and fov widened so both background dealers fit inside the narrow 9:16 frame.
-// Look target lowered (y 1.2/1.1 -> 0.95/0.85) so Poisson's big foreground grin sits above the
-// caption band instead of under it, and the dealers sit at x -45.8/-45.5 (projected, not guessed:
-// at -45.0/-46.5 they were cut by the right/left frame edges in still2_585).
-const S4a = (f: number) => dolly([-39.5, 2.6, 7.0], [-46.2, 0.95, 1.5], pushK(f, 510, 0.002), { fov: 40 });
-const S4b = (f: number) => dolly([-40.5, 2.4, 6.0], [-46.2, 0.85, 1.5], pushK(f, 580, 0.0025), { fov: 38 });
+// Putaran 4: sama seperti S3 — dari ujung timur meja.
+const S4a = (f: number) => dolly([-40.5, 2.7, 6.3], [-47.0, 1.0, 1.6], pushK(f, 510, 0.001), { fov: 44 });
+const S4b = (f: number) => dolly([-41.0, 2.5, 6.8], [-47.0, 0.95, 1.6], pushK(f, 580, 0.0012), { fov: 42 });
 // S5 payoff: Poisson hands over the envelope; Lustig pockets the money, sly smile.
-// Tahap 6: camera pulled back (Poisson was filling half the frame at 4.5 m) and fov widened
-// so both background dealers fit inside the narrow 9:16 frame.
-const S5a = (f: number) => dolly([-38.5, 2.6, 7.0], [-45.8, 1.2, 1.7], pushK(f, 660, 0.002), { fov: 40 });
-const S5b = (f: number) => dolly([-39.5, 2.4, 6.0], [-45.8, 1.1, 1.7], pushK(f, 750, 0.0025), { fov: 38 });
+// Putaran 4: sama seperti S3/S4 — dari ujung timur meja, target ke titik serah terima.
+const S5a = (f: number) => dolly([-40.5, 2.7, 6.3], [-45.8, 1.1, 1.9], pushK(f, 660, 0.001), { fov: 44 });
+const S5b = (f: number) => dolly([-41.0, 2.5, 6.8], [-45.8, 1.0, 1.9], pushK(f, 750, 0.0012), { fov: 42 });
 // S6 wait: Vienna cafe again, Lustig with a stack of French newspapers, checking for news that never comes.
-// Camera from the SOUTHEAST, low-medium height (y ~3), looking northwest at the table, fov 52-54.
-// Tahap 6: Lustig now sits on the NORTH side of his table (facing the camera, chair back behind
-// him), so the flat papers lie on the table in front of him and the sightline to his chin passes
-// above them — his nervous face reads clear. Look target panned 0.5 m west so the patron is in frame.
-const S6a = (f: number) => dolly([42.9, 3.4, 32.5], [38.0, 1.0, 26.2], pushK(f, 840, 0.002), { fov: 54 });
-const S6b = (f: number) => dolly([41.9, 3.1, 31.5], [38.0, 0.95, 26.2], pushK(f, 930, 0.0025), { fov: 52 });
+// v3 (27 Nov 2026): sama seperti S2 — kamera lama terlalu jauh/tinggi (fov 52-54,
+// karakter makin kecil). Kamera baru dekat + rendah + fov sempit, target torso.
+const S6a = (f: number) => dolly([42.5, 2.4, 30.5], [38.3, 1.2, 25.8], pushK(f, 840, 0.002), { fov: 44 });
+const S6b = (f: number) => dolly([42.0, 2.3, 30.0], [38.3, 1.15, 25.8], pushK(f, 930, 0.0025), { fov: 42 });
 // S7 Poisson alone: the street under the tower, Poisson head down, embarrassed, tower looming behind him.
 // Camera pulled far back down the street and wide (fov 55-58) so the FULL tower (base, both
 // decks, spire tip) fits behind him, with Poisson small in the lower frame, clear of the subtitle.
@@ -155,12 +171,10 @@ const S6b = (f: number) => dolly([41.9, 3.1, 31.5], [38.0, 0.95, 26.2], pushK(f,
 const S7a = (f: number) => dolly([0, 2, 5 - 2 * smooth((f - 1020) / 90)], [0, 27, -60], pushK(f, 1020, 0), { fov: 55 });
 const S7b = (f: number) => dolly([0, 1.9, 0 - 2 * smooth((f - 1110) / 90)], [0, 25, -60], pushK(f, 1110, 0), { fov: 58 });
 // S8 return: the salon again — Lustig with fresh letters, five NEW dealers.
-// Tahap 6: the west-side camera is GONE (it put Lustig, who stands at the table's west end,
-// beside/behind the camera, so he was entirely out of frame in still2_1290, and the frame was
-// half blank south wall). Same southeast view as shot 3 (same trick, new dealers), slightly
-// higher and further back with a wider fov so all five new dealers fit.
-const S8a = (f: number) => dolly([-39, 3.0, 8.5], [-47.5, 1.4, 1.5], pushK(f, 1200, 0.002), { fov: 44 });
-const S8b = (f: number) => dolly([-40, 2.7, 7.5], [-47, 1.5, 1.5], pushK(f, 1290, 0.0025), { fov: 40 });
+// Putaran 4: sama seperti S3 (dari ujung timur meja), sedikit lebih tinggi dan
+// mundur dengan fov lebih lebar supaya kelima dealer baru muat.
+const S8a = (f: number) => dolly([-40.5, 2.7, 6.3], [-48.5, 1.4, 1.3], pushK(f, 1200, 0.001), { fov: 44 });
+const S8b = (f: number) => dolly([-41.0, 2.6, 6.8], [-48.0, 1.5, 1.4], pushK(f, 1290, 0.0012), { fov: 40 });
 // S9 police: two shots in one, joined by a HARD CUT at f1470 (the room is 18 m wide and the
 // action spans it end to end — no single 9:16 camera inside the room can show the east door,
 // the table and the west door at once, proven by still2_1440/1470 where the police were only
@@ -170,14 +184,17 @@ const S8b = (f: number) => dolly([-40, 2.7, 7.5], [-47, 1.5, 1.5], pushK(f, 1290
 // looking west at Lustig slipping out the lit west door with his suitcase.
 const S9a = (f: number) => dolly([-44, 3.0, -1], [-40.5, 1.3, 4], pushK(f, 1380, 0.002), { fov: 44 });
 const S9b = (f: number) => dolly([-47.5, 3.0, 4], [-54, 1.2, -2], pushK(f, 1470, 0.002), { fov: 44 });
-// S10 sunset: the tower standing majestic at golden hour, plaza below, Lustig gone.
-// Look target raised so the spire tip (which was cropped at the top edge) fits inside the frame.
-// Tahap 6: the old S10b drift ran the camera EAST into the Haussmann building at (18, 40) —
-// still2_1680 was a purple blur for the whole second half of the shot. The drift now stays
-// on the east sidewalk (x <= 11), moving south along the street instead of east into the facades.
-// Same dolly note as S1: pushK rate 0, the slow lateral drift keeps the shot creeping.
-const S10a = (f: number) => dolly([11 + 1 * smooth((f - 1560) / 120), 3, 30 + 2 * smooth((f - 1560) / 120)], [0, 30, -60], pushK(f, 1560, 0), { fov: 44 });
-const S10b = (f: number) => dolly([10 + 1 * smooth((f - 1680) / 120), 5, 43 + 2 * smooth((f - 1680) / 120)], [0, 27, -60], pushK(f, 1680, 0), { fov: 46 });
+// S10 sunset: the tower standing majestic at golden hour, plaza below, Lustig walking
+// away down the street toward it.
+// v3 (27 Nov 2026): kamera lama (z 30-43, target y 27-30) mendongak ke menara
+// sehingga tanah di dekat kamera keluar frame — Lustig cuma titik kecil di
+// kejauhan. Kamera baru DI TENGAH JALAN (x 0, z 8, y 2.5) dengan fov 58 dan
+// target y 24: seluruh menara masih muat (puncak ~27 derajat di atas sumbu,
+// setengah fov 29 derajat) DAN Lustig yang berjalan di z -8..-20 masuk
+// sepertiga bawah frame (~9% tinggi frame di awal, mengecil sambil menjauh).
+// Dorongan pelan 2 m ke depan supaya shot tetap bergerak, bukan hold statis.
+const S10a = (f: number) => dolly([0, 2.5, 8 + 2 * smooth((f - 1560) / 120)], [0, 24, -60], pushK(f, 1560, 0), { fov: 58 });
+const S10b = (f: number) => dolly([0, 2.5, 10 + 2 * smooth((f - 1680) / 120)], [0, 24, -60], pushK(f, 1680, 0), { fov: 58 });
 
 const CAMS: Record<number, Key[]> = {
   1: [
@@ -262,7 +279,7 @@ export const DOF: Dof[] = [
   { f: 840, cInf: 0 },
   { f: 930, dur: 24, cInf: 10, focus: () => [38.5, 1.1, 25.5] }, // Tahap 6: Lustig sits on the table's north side now
   { f: 1020, cInf: 0 },
-  { f: 1110, dur: 24, cInf: 10, focus: (f) => [0, 1.6, -15] },
+  { f: 1110, dur: 24, cInf: 10, focus: (f) => [0, 1.6, -11] }, // v3.2 (27 Nov 2026): fokus di Poisson (0, -11), bukan di (0, -15) yang kosong — di v3_1190 seluruh frame blur karena tidak ada subjek di titik fokus
   { f: 1200, cInf: 0 },
   { f: 1290, dur: 24, cInf: 12, focus: () => [-46, 1.4, 1] },
   { f: 1380, cInf: 0 },

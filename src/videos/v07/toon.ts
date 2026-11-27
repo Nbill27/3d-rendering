@@ -708,7 +708,13 @@ export const bodyFront = (p: Pen, o: Outfit, opts: FrontOpts) => {
 };
 
 export type SideOpts = {
-  phase?: number; expr?: Expr; mode?: "march" | "stand" | "swing" | "push" | "ride"; blink?: boolean | number; stomp?: number; pose?: number;
+  phase?: number; expr?: Expr; mode?: "march" | "stand" | "swing" | "push" | "ride" | "sit"; blink?: boolean | number; stomp?: number; pose?: number;
+  /** sit: tinggi pinggul dalam design unit — HARUS dihitung dari tinggi dudukan
+   *  kursi (meter) dan skala kartu: hipY = 975 - seatM / (0.00216 * scale).
+   *  Kalau tidak, karakter berskala 0.92 (Lustig) duduk 6,5 cm DI BAWAH dudukan
+   *  dan pahanya terbaca di bawah kursi, bukan di atasnya (v3sit_300).
+   *  Default 776 = bantal hotel 0,43 m pada skala 1,0. */
+  hipY?: number;
   /** step length as a multiple of 0.8 m (370 units): matches 1.6 m/s at 2 steps/s; scale by the view's foreshortening */
   stride?: number; light?: number; seed?: number;
   /** push mode: where the hands land at pose 1, in final canvas units (e.g. the swing kid's back) */
@@ -728,12 +734,13 @@ const SWING_HIP = 733;
 /** side view facing screen-right; march footfalls land at phase 0 (near foot) and 0.5 (far foot), like the front view.
  *  The stance foot is planted: it slides back at exactly the walking speed while the hip rises and falls over it. */
 export const bodySide = (p: Pen, o: Outfit, opts: SideOpts) => {
-  const { phase = 0, expr = "neutral", mode = "march", blink = false, stomp = 1, pose = 0, stride = 1, light = DEF_LIGHT, seed = 1 } = opts;
+  const { phase = 0, expr = "neutral", mode = "march", blink = false, stomp = 1, pose = 0, stride = 1, light = DEF_LIGHT, seed = 1, hipY: hipYOpt } = opts;
   const Bd = BUILD[o.build ?? "adult"], skin = o.skin ?? SKIN, two = Math.PI * 2, lid = lidOf(blink);
   const H: Blob = { ...headBlob(seed, Bd.a, 1), asym: 0.12, rot: rad(3 + 3 * (rnd(seed, 7) - 0.5)) };
   const W = 2 * H.a, HH = 2 * H.b, u = W / 100, sole = 975, ankY = sole - 4 * u;
   const thick = thickAngle(light), ow = 5 * u;
-  const legLen = (Bd.legs + 0.12) * HH - 4 * u, l1 = legLen / 2, l2 = legLen / 2;
+  const legLen = (Bd.legs + 0.12) * HH - 4 * u;
+  let l1 = legLen / 2, l2 = legLen / 2;
   const nearCol = mix(o.pants, INK, 0.55), farCol = mix(o.pants, INK, 0.75), footCol = o.boots;
   type LegS = { ank: P2; pitch: number; near: boolean };
   const legs: LegS[] = [];
@@ -775,18 +782,50 @@ export const bodySide = (p: Pen, o: Outfit, opts: SideOpts) => {
       const knee: P2 = [300 + l1 * 0.98 + dx * u, hipY + 6 * u];
       legs.push({ ank: [knee[0] + l2 * Math.sin(a), knee[1] + l2 * Math.cos(a)], pitch: -a * 0.5, near });
     }
+  } else if (mode === "sit") {
+    // DUDUK di kursi, side view (referensi duduk bill, 4 pictogram + referensi
+    // hotel GPT): paha HARUS horizontal berbaring di atas dudukan, lutut tertekuk
+    // ~90 derajat tepat di tepi depan dudukan, betis vertikal ke lantai, kaki
+    // menapak di lantai. Front view TIDAK PERNAH bisa menunjukkan ini (paha
+    // mengarah ke kamera, tersembunyi di balik blob torso + meja) — makanya
+    // Putaran 3 di bodyFront gagal dan sitter dipindah ke side view.
+    // Hip di tinggi bantal kursi hotel (0,43 m -> design y 776); torso TIDAK
+    // dikompres (seperti bodyFront sit) supaya kepala sitter tetap di atas meja
+    // (dagu 0,90 m, bahu 0,83 m, meja 0,85 m) seperti di referensi.
+    // Betis dipanjangkan (l2 = ankY - hipY) supaya paha horizontal + betis
+    // vertikal tepat menjangkau lantai: IK menaruh lutut di (300+l1, hipY).
+    // Paha dibuat LEBIH PANJANG (l1 180, bukan 164) supaya lutut jelas di depan
+    // kursi dan paha yang terlihat (di luar siluet torso) cukup panjang.
+    hipY = hipYOpt ?? 776;
+    l1 = 180;
+    l2 = ankY - hipY;
+    legs.push({ ank: [300 + l1 - 6 * u, ankY], pitch: 0, near: false }, { ank: [300 + l1 + 6 * u, ankY], pitch: 0, near: true });
+    lean = 6; // condong sedikit ke depan, ke arah meja
   } else {
     legs.push({ ank: [300 - 4 * u, ankY], pitch: 0, near: false }, { ank: [300 + 4 * u, ankY], pitch: 0, near: true });
   }
-  const torsoBot = hipY + 0.12 * HH, chin = torsoBot - Bd.torso * HH, hc = chin - H.b, crown = hc - H.b, hip: P2 = [300, hipY];
+  // sit: torso berakhir TEPAT di dudukan (0.02*HH di bawah pinggul), bukan
+  // 0.12*HH — kalau tidak, bongkahan torso menggantung 0,09 m DI BAWAH dudukan
+  // dan karakter terbaca "tenggelam menembus kursi" (v3sit_300).
+  const torsoBot = hipY + (mode === "sit" ? 0.02 : 0.12) * HH, chin = torsoBot - Bd.torso * HH, hc = chin - H.b, crown = hc - H.b, hip: P2 = [300, hipY];
   p.rot = null;
   for (const L of legs) {
     const knee = mode === "swing" ? ([300 + l1 * 0.98 + (L.near ? 0 : -6 * u), hipY + 6 * u] as P2) : ik(hip, L.ank, l1, l2);
     const hp0: P2 = [300 + (L.near ? 0 : -5 * u), hipY];
-    p.stroke([hp0, knee, L.ank], 5.8 * u, L.near ? nearCol : farCol);
-    const c = Math.cos(L.pitch), s = Math.sin(L.pitch);
-    footStroke(p, [L.ank[0] - 3 * u * c, L.ank[1] - 3 * u * s], [L.ank[0] + 13 * u * c, L.ank[1] + 13 * u * s + 0.5 * u],
-      7.5 * u, L.near ? footCol : footCol === INK ? INK : shade(footCol, 0.82));
+    if (mode === "sit") {
+      // paha sebagai MASSA TEBAL horizontal (9u) yang berbaring di atas dudukan,
+      // betis vertikal TEBAL (8u, bukan 5.8u — kalau tidak, betis terbaca seperti
+      // garis tipis menjuntai), kaki menapak panjang dan tebal
+      p.stroke([hp0, knee], 9 * u, L.near ? nearCol : farCol);
+      p.stroke([knee, L.ank], 8 * u, L.near ? nearCol : farCol);
+      footStroke(p, [L.ank[0] - 4 * u, L.ank[1]], [L.ank[0] + 16 * u, L.ank[1] - 4 * u], 9 * u,
+        L.near ? footCol : footCol === INK ? INK : shade(footCol, 0.82));
+    } else {
+      p.stroke([hp0, knee, L.ank], 5.8 * u, L.near ? nearCol : farCol);
+      const c = Math.cos(L.pitch), s = Math.sin(L.pitch);
+      footStroke(p, [L.ank[0] - 3 * u * c, L.ank[1] - 3 * u * s], [L.ank[0] + 13 * u * c, L.ank[1] + 13 * u * s + 0.5 * u],
+        7.5 * u, L.near ? footCol : footCol === INK ? INK : shade(footCol, 0.82));
+    }
   }
   // ---- upper body leans about the hip ----
   p.rot = lean ? [rad(lean), 300, hipY] : null;
@@ -804,6 +843,12 @@ export const bodySide = (p: Pen, o: Outfit, opts: SideOpts) => {
   let near: [P2, P2, P2], far: [P2, P2, P2] | null;
   if (mode === "swing") { near = [S, [S[0] + 12 * u, S[1] - 0.16 * HH], [300 + 6 * u, chin - 0.3 * HH]]; far = [S, [S[0] + 8 * u, S[1] - 0.18 * HH], [300 + 2 * u, chin - 0.36 * HH]]; }
   else if (mode === "ride") { near = swingArm(rad(55)); far = swingArm(rad(45)); }
+  else if (mode === "sit") {
+    // tangan mencapai ke depan ke atas meja (referensi: tangan di atas dokumen):
+    // lengan dekat hampir horizontal sampai ke permukaan meja, lengan jauh
+    // lebih rendah, bersandar di paha
+    near = swingArm(rad(80)); far = swingArm(rad(10));
+  }
   else if (mode === "push") {
     const reach = 0.55 * HH + 0.45 * HH * pose;
     let hN: P2 = [S[0] + reach, S[1] + 0.06 * HH];
