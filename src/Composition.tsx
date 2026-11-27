@@ -14,7 +14,6 @@ import { Video06 } from "./videos/v06/Video06";
 import { Video07 } from "./videos/v07/Video07";
 import { Video08 } from "./videos/v08/Video08";
 import { Video09 } from "./videos/v09/Video09";
-import { VideoBlockyRonaldo } from "./videos/blocky-ronaldo/VideoBlockyRonaldo";
 import { TobaTest } from "./videos/v10/TobaTest";
 import { TobaTestV2 } from "./videos/v11/TobaTestV2";
 import { Video14 } from "./videos/v14/Video14";
@@ -175,14 +174,6 @@ export const MyComposition = () => {
         width={1080}
         height={1920}
       />
-      <Composition
-        id="VideoBlockyRonaldo"
-        component={VideoBlockyRonaldo}
-        durationInFrames={13404}
-        fps={30}
-        width={1080}
-        height={1920}
-      />
-    </>
+      >
   );
 };
