@@ -12,7 +12,7 @@ import { Batch, boxGeo, V, lam, house, prop, Kit, kitClone } from "./build";
 import { ctex, cobbleHD, stoneHD, planksHD, cloudHD } from "./paint";
 import { Pen } from "./toon";
 import { LIGHTS, LOOK, LightPreset } from "./lights";
-import { TONE, CHAR, untone } from "./shade";
+import { TONE, CHAR, untone, twoTone, TOWER_TONE } from "./shade";
 import { NOINK } from "./ink";
 import { Pool, Actor, Fx, stage } from "./cast";
 import { FPS, SHOTS, camAt, storyState, TOWER_POS, TABLE_POS, FOREGROUND, ShotDef } from "./story";
@@ -76,7 +76,7 @@ const plasterTex = () => ctex("plaster", 512, 512, (g) => {
   g.strokeStyle = "rgba(120,90,40,0.4)"; g.lineWidth = 5;
   g.beginPath(); g.moveTo(0, 384); g.lineTo(512, 384); g.stroke(); // dado line (texture v maps to wall height)
 });
-const SUN_SHOT: Record<number, { az?: number; el?: number }> = { 10: { az: -30, el: 18 } };
+const SUN_SHOT: Record<number, { az?: number; el?: number }> = { 10: { az: -10, el: 16 } }; // Tahap 6: az -30 put the sun disc 30 deg off the view axis (outside the 13 deg horizontal half-fov, so no sun disc ever showed); az -10/el 16 parks it just beside the tower's silhouette, in frame
 
 type Mats = Record<string, THREE.Material>;
 
@@ -97,23 +97,58 @@ const beamBetween = (b: Batch, mat: THREE.Material, ax: number, ay: number, az: 
   b.add(boxGeo(V(-th / 2, 0, -th / 2), V(th / 2, 1, th / 2), 0), mat, m);
 };
 
-/** the Eiffel Tower as a lattice of iron beams: four legs that curve inward in three tiers,
- *  X-braces on every face, two observation decks, a spire.
- *  (cx, cz) = tower centre, s = scale (1 = the real 70 m tower, 0.014 = the 1 m miniature on the
- *  salon table), y0 = base height. The silhouette — wide arched base, two decks, spire — is what
- *  makes it read as the Eiffel Tower at a glance. */
-const towerAt = (b: Batch, mat: THREE.Material, cx: number, cz: number, s: number, y0: number) => {
-  // leg corner half-widths at each tier boundary (heights in tower metres, scaled)
-  const H = [0, 16, 34, 50], W = [8, 5.5, 3, 0.8];
+/** the Eiffel Tower as a lattice of iron beams: four legs on a WIDE base that curve
+ *  inward on a strong concave curve, OPEN arches at the bottom (no lattice across the
+ *  arch opening — that open arch is what says "Eiffel" in silhouette), three observation
+ *  decks (the first wide and prominent), a short tapering spire, and stone footings
+ *  under each foot so the tower stands ON the ground.
+ *  (cx, cz) = tower centre, s = scale (1 = the real ~70 m tower, 0.014 = the 1 m miniature
+ *  on the salon table), y0 = base height. Perbaikan 27 Nov (bill: "menara Eiffel ga
+ *  keliatan kaya Eiffel"): the old tower was too slim and straight with a filled arch,
+ *  so it read as a radio mast — base widened, curve made concave, arch opened, first
+ *  deck widened, spire shortened. */
+const towerAt = (b: Batch, mat: THREE.Material, matD: THREE.Material, matS: THREE.Material, cx: number, cz: number, s: number, y0: number) => {
+  // leg corner half-widths at each tier boundary (heights in tower metres, scaled):
+  // the profile drops FAST at the bottom (9.5 -> 5.5 in 16 m) then flattens (5.5 -> 2.6
+  // -> 0.8) — the real Eiffel curve is concave, not the near-linear slope of the old W.
+  const H = [0, 16, 34, 50], W = [9.5, 5.5, 2.6, 0.8];
   const corner = (i: number, sx: number, sz: number): [number, number, number] =>
     [cx + sx * W[i] * s, y0 + H[i] * s, cz + sz * W[i] * s];
+  // stone footings under each foot: the tower stands on stone, it does not float
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+    const [fx, , fz] = corner(0, sx, sz);
+    b.add(boxGeo(V(fx - 0.8 * s, y0, fz - 0.8 * s), V(fx + 0.8 * s, y0 + 0.5 * s, fz + 0.8 * s), 0), matS);
+  }
+  // legs: each tier split in two sub-segments whose mid-width bows slightly INWARD
+  // (0.93x the chord), following the concave Eiffel curve — the old 1.07x bowed outward
+  // and made the legs read as straight sticks. Legs are thicker at the base now.
   for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
     for (let i = 0; i < 3; i++) {
       const [ax, ay, az] = corner(i, sx, sz), [bx, by, bz] = corner(i + 1, sx, sz);
-      beamBetween(b, mat, ax, ay, az, bx, by, bz, (1.15 - i * 0.22) * s);
+      const my = (ay + by) / 2, mw = ((W[i] + W[i + 1]) / 2) * 0.93;
+      const mx = cx + sx * mw * s, mz = cz + sz * mw * s;
+      beamBetween(b, mat, ax, ay, az, mx, my, mz, (1.3 - i * 0.25) * s);
+      beamBetween(b, mat, mx, my, mz, bx, by, bz, (1.3 - i * 0.25) * s);
     }
   }
-  // X-braces + horizontal struts on each face, per tier
+  // arch ribs: an arc of short beams between adjacent feet, rising to 12 m at mid-span —
+  // the base arch that says "Eiffel" even in silhouette. Thickened so it reads at a glance.
+  const feet = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
+  for (let f = 0; f < 4; f++) {
+    const [sx1, sz1] = feet[f], [sx2, sz2] = feet[(f + 1) % 4];
+    const [ax, , az] = corner(0, sx1, sz1), [bx, , bz] = corner(0, sx2, sz2);
+    let px = ax, py = y0, pz = az;
+    for (let k = 1; k <= 5; k++) {
+      const u = k / 5;
+      const qx = ax + (bx - ax) * u, qz = az + (bz - az) * u, qy = y0 + 12 * s * Math.sin(Math.PI * u);
+      beamBetween(b, mat, px, py, pz, qx, qy, qz, 0.8 * s);
+      px = qx; py = qy; pz = qz;
+    }
+  }
+  // X-braces + horizontal struts on each face, per tier (darker iron, so they read as lattice, not legs).
+  // Perbaikan 27 Nov: tier 0 (0-16 m) gets NO diagonals — the old X-braces crossed the
+  // arch opening and filled it with lattice, which is why the tower read as a radio mast.
+  // The arch must stand OPEN below the first deck; the lattice starts above it.
   for (let i = 0; i < 3; i++) {
     const yA = y0 + H[i] * s, yB = y0 + H[i + 1] * s;
     const faces: [[number, number], [number, number]][] = [
@@ -125,26 +160,34 @@ const towerAt = (b: Batch, mat: THREE.Material, cx: number, cz: number, s: numbe
       const wB = W[i + 1];
       const tx1 = cx + (x1 < 0 ? -wB : wB) * s, tz1 = cz + (z1 < 0 ? -wB : wB) * s;
       const tx2 = cx + (x2 < 0 ? -wB : wB) * s, tz2 = cz + (z2 < 0 ? -wB : wB) * s;
-      beamBetween(b, mat, tx1, yB, tz1, tx2, yB, tz2, 0.5 * s);
+      beamBetween(b, matD, tx1, yB, tz1, tx2, yB, tz2, 0.5 * s);
+      if (i === 0) continue; // tier 0 stays open: the arch, not lattice
       // X-brace diagonals across the face
       const bx1 = cx + x1 * s, bz1 = cz + z1 * s, bx2 = cx + x2 * s, bz2 = cz + z2 * s;
-      beamBetween(b, mat, bx1, yA, bz1, tx2, yB, tz2, 0.45 * s);
-      beamBetween(b, mat, bx2, yA, bz2, tx1, yB, tz1, 0.45 * s);
+      beamBetween(b, matD, bx1, yA, bz1, tx2, yB, tz2, 0.45 * s);
+      beamBetween(b, matD, bx2, yA, bz2, tx1, yB, tz1, 0.45 * s);
     }
   }
-  // observation decks with railings
-  for (const [hy, hw] of [[16, 6.4], [34, 3.9]] as const) {
+  // observation decks with railings (the third deck is small and low-railed).
+  // Perbaikan 27 Nov: the first deck is wider (7.6) and thicker (1.1) — the real first
+  // floor juts out well beyond the legs and is the tower's most prominent platform.
+  for (const [hy, hw, th, rh] of [[16, 7.6, 1.1, 1.1], [34, 4.2, 0.8, 1.1], [50, 1.2, 0.5, 0.8]] as const) {
     const y = y0 + hy * s, w = hw * s;
-    b.add(boxGeo(V(cx - w, y, cz - w), V(cx + w, y + 0.8 * s, cz + w), 0), mat);
-    const r = 0.18 * s, rh = 1.1 * s;
+    b.add(boxGeo(V(cx - w, y, cz - w), V(cx + w, y + th * s, cz + w), 0), mat);
+    const r = 0.18 * s, rhh = rh * s;
     for (const [x1, z1, x2, z2] of [[-w, -w, w, -w], [w, -w, w, w], [w, w, -w, w], [-w, w, -w, -w]] as const)
-      beamBetween(b, mat, cx + x1, y + 0.8 * s + rh, cz + z1, cx + x2, y + 0.8 * s + rh, cz + z2, r);
+      beamBetween(b, matD, cx + x1, y + th * s + rhh, cz + z1, cx + x2, y + th * s + rhh, cz + z2, r);
     for (const [px, pz] of [[-w, -w], [w, -w], [w, w], [-w, w], [0, -w], [0, w], [-w, 0], [w, 0]] as const)
-      beamBetween(b, mat, cx + px, y + 0.8 * s, cz + pz, cx + px, y + 0.8 * s + rh, cz + pz, r);
+      beamBetween(b, matD, cx + px, y + th * s, cz + pz, cx + px, y + th * s + rhh, cz + pz, r);
   }
-  // spire: converging cone + antenna ball
-  beamBetween(b, mat, cx, y0 + 50 * s, cz, cx, y0 + 68 * s, cz, 0.9 * s);
-  b.add(new THREE.SphereGeometry(0.9 * s, 12, 8), mat, new THREE.Matrix4().makeTranslation(cx, y0 + 69 * s, cz));
+  // spire: three tapering segments + thin antenna + small beacon (anatomy Fig 1: no big ball).
+  // Perbaikan 27 Nov: shortened (tip 69.5 m, was 72.5 m) — the old spire was a third of
+  // the tower's height, which pushed the silhouette toward a radio mast.
+  beamBetween(b, mat, cx, y0 + 50 * s, cz, cx, y0 + 57 * s, cz, 0.8 * s);
+  beamBetween(b, mat, cx, y0 + 57 * s, cz, cx, y0 + 62 * s, cz, 0.55 * s);
+  beamBetween(b, mat, cx, y0 + 62 * s, cz, cx, y0 + 65.5 * s, cz, 0.35 * s);
+  beamBetween(b, matD, cx, y0 + 65.5 * s, cz, cx, y0 + 69 * s, cz, 0.12 * s);
+  b.add(new THREE.SphereGeometry(0.5 * s, 12, 8), mat, new THREE.Matrix4().makeTranslation(cx, y0 + 69.5 * s, cz));
 };
 
 export class World {
@@ -194,11 +237,22 @@ export class World {
     this.fill = new THREE.DirectionalLight("#9fb8ff", 0.35);
     R.add(this.hemi, this.sun, this.sun.target, this.fill, this.fill.target);
     this.cloudMaps = { day: [0, 1, 2, 3].map((k) => cloudHD(k, LOOK.day.cloud)), golden: [0, 1, 2, 3].map((k) => cloudHD(k, LOOK.golden.cloud)), warm: [0, 1, 2, 3].map((k) => cloudHD(k, LOOK.warm.cloud)) };
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2 + 0.3, d = 420 + (i % 3) * 50;
+    for (let i = 0; i < 15; i++) {
+      const a = (i / 15) * Math.PI * 2 + 0.3, d = 420 + (i % 3) * 50;
       const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.cloudMaps.day[i % 4], color: new THREE.Color(1.1, 1.1, 1.1), transparent: true, depthWrite: false, fog: false }));
       const w = 120 + (i % 4) * 25;
-      m.position.set(Math.cos(a) * d, 28 + (i % 4) * 6, Math.sin(a) * d); m.scale.set(w, w / 2, 1);
+      // the first 9 clouds stay low (y 28-46); the 6 extra clouds ride higher (y 42-50)
+      // and further out, filling the ~60% empty sky in the plaza shots
+      m.position.set(Math.cos(a) * d, i < 9 ? 28 + (i % 4) * 6 : 42 + (i % 3) * 4, Math.sin(a) * d); m.scale.set(w, w / 2, 1);
+      m.layers.set(NOINK);
+      this.clouds.push(m); R.add(m);
+    }
+    // Tahap 6: 4 extra HIGH clouds (y 80-95, 150-200 m wide) for the plaza shots — the top ~55%
+    // of shot 1's frame was empty sky (still2_075); pushed into this.clouds so the per-frame
+    // material update loop covers them too
+    for (const [x, y, z, w] of [[-120, 85, -180, 180], [60, 95, -220, 200], [180, 80, -120, 150], [-200, 90, -80, 170]] as const) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.cloudMaps.day[this.clouds.length % 4], color: new THREE.Color(1.1, 1.1, 1.1), transparent: true, depthWrite: false, fog: false }));
+      m.position.set(x, y, z); m.scale.set(w, w / 2, 1);
       m.layers.set(NOINK);
       this.clouds.push(m); R.add(m);
     }
@@ -213,7 +267,17 @@ export class World {
     M.wood = lam("wood", () => ({ color: "#8a6a44" }));
     M.red = lam("carpetRed", () => ({ color: "#8a2a2e" }));
     M.brass = lam("brass", () => ({ color: "#c9a24a" }));
-    M.towerIron = lam("towerIron", () => ({ color: "#8a6a48" }));
+    M.towerIron = lam("towerIron", () => ({ color: "#9a6830" })); // warm iron brown (anatomy Fig 1) — Tahap 6: brightened from #7c5230, the south face read grey-blue under the two-tone shader (sunTerm ~ 0) in still2_075
+    M.towerIronDark = lam("towerIronDark", () => ({ color: "#6e4420" })); // braces, struts, antenna — Tahap 6: brightened with it
+    // Tahap 6: the tower's iron gets its own shade/lift (shade.ts TOWER_TONE) — the albedo brightening
+    // above was NOT enough (still2_075 stayed lavender: the day preset's blue lift beats any albedo),
+    // so both iron materials are re-wrapped with the override variant of twoTone; the miniature on
+    // the salon table shares these materials and is unaffected (warm preset = warm values already)
+    twoTone(M.towerIron, 1, { shade: TOWER_TONE.uShadeCol, lift: TOWER_TONE.uShadeLift });
+    twoTone(M.towerIronDark, 1, { shade: TOWER_TONE.uShadeCol, lift: TOWER_TONE.uShadeLift });
+    M.stone = lam("towerStone", () => ({ color: "#c8b18e" })); // tower footings, planters
+    M.lampGlass = lam("lampGlass", () => ({ color: "#ffd98a" })); // warm lamp glass
+    M.flagBlue = lam("flagBlue", () => ({ color: "#2a4a8a" })); // tricolore blue
     M.white = lam("porcelain", () => ({ color: "#f1ece0" }));
     M.awning = lam("awning", () => ({ map: awningTex() }));
     // plaza (tower end) and street, sidewalks on both sides, lawn strips by the plaza
@@ -226,7 +290,7 @@ export class World {
     b.add(quadAt(12, 56, 10, 44, 0.015, 11, 8), M.sidewalk); // cafe terrace floor (east)
 
     // ---- the Eiffel Tower (real scale, 70 m) over the north end of the plaza ----
-    towerAt(b, M.towerIron, TOWER_POS[0], TOWER_POS[2], 1, 0);
+    towerAt(b, M.towerIron, M.towerIronDark, M.stone, TOWER_POS[0], TOWER_POS[2], 1, 0);
 
     // ---- Haussmann buildings lining the street (facades face the street) ----
     // east side, facing west (-x): yaw -PI/2 makes the front (+z local) face -x... house() front is local +z,
@@ -243,9 +307,18 @@ export class World {
     house(b, 24, -30, 0, 12, 10, 13, 0);
     house(b, -24, -30, 0, 12, 10, 13, 6);
 
-    // ---- street lamps along the street and the plaza ----
+    // ---- street lamps along the street and the plaza (code-built: the lantern GLB never loads) ----
     for (const [x, z] of [[-6.5, -12], [6.5, -2], [-6.5, 8], [6.5, 18], [-6.5, 28], [6.5, 38], [-14, -46], [14, -46]] as const)
-      prop(b, kit, "lantern", x, 0, z, 3.2, 0);
+      lampPost(b, M, x, z);
+    // ---- tricolore flag poles flanking the tower approach (they fill the upper frame in shots 1/7) ----
+    // Tahap 6: poles 9 -> 11 m, panels 0.9 -> 1.2 m wide, moved in to x +/-9, z -42 — the old flags
+    // were a tiny sliver at the frame edge in still2_075/1110
+    flagPole(b, M, -9, -42); flagPole(b, M, 9, -42);
+    // ---- birds over the street (two thin crossed bars each, high in the plaza sky) ----
+    bird(b, M, -6, 26, -30); bird(b, M, 8, 30, -20); bird(b, M, 2, 24, -38);
+    // ---- market stalls on the lawn strips, flanking the tower ----
+    // Tahap 6: pulled in to x +/-12, z -40 — at +/-18, -44 they fell outside shot 7's frame (still2_1110)
+    marketStall(b, M, -12, -40, 0); marketStall(b, M, 12, -40, 0);
 
     // ---- trees on the plaza edges and the lawn strips, clear of the tower, the street and the cameras ----
     const hr = (() => { let s = 23; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; })();
@@ -268,7 +341,12 @@ export class World {
     // park benches flanking the street on the plaza (they frame the hook + Poisson shots)
     bench(b, M.wood, M.red, -9.5, -14, 0); bench(b, M.wood, M.red, 9.5, -14, 0);
     bench(b, M.wood, M.red, -12, -30, 0); bench(b, M.wood, M.red, 12, -30, 0);
-    prop(b, kit, "cart", 17, 0, -26, 1.5, -Math.PI / 2); // market cart on the plaza's east side
+    // low stone planters at the bottom edge of the plaza shots' frames (foreground framing)
+    // Tahap 6: pushed 0.7 m further out and bushes shrunk (0.9 -> 0.6) — in still2_075 the two
+    // foreground bushes were giant blobs filling the bottom corners
+    planter(b, kit, M, -2.2, 13.5); planter(b, kit, M, 2.2, 15.5);
+    // market cart on the plaza's east side, pulled in to x 9 so it sits inside shot 1's frame
+    marketCart(b, M, 9, -26, -Math.PI / 2);
     b.build(R);
 
     // ---- the Hotel de Crillon salon (interior room, west): floor, walls with two door gaps,
@@ -277,9 +355,9 @@ export class World {
     const S = { floor: lam("salonFloor", () => ({ map: planksHD() })), wall: lam("salonPlaster", () => ({ map: plasterTex() })), table: M.woodDark, chair: M.wood, carpet: M.red, brass: M.brass, white: M.white,
       painting: lam("painting", () => ({ map: paintingTex() })), corridor: lam("corridor", () => ({ color: "#d99a4a" })), corridorGlass: lam("corridorGlass", () => ({ color: "#f2c078" })) };
     const RX0 = -55, RX1 = -37, RZ0 = -5, RZ1 = 9, RH = 5.2; // room bounds
-    // floor + carpet
+    // floor + carpet (the carpet runs the full table length now, filling the empty red floor in shots 3/5)
     sb.add(quadAt(RX0, RX1, RZ0, RZ1, 0.03, 9, 7), S.floor);
-    sb.add(quadAt(-50, -42, -1, 5, 0.05, 4, 3), S.carpet);
+    sb.add(quadAt(-51, -41, -3, 7, 0.05, 5, 5), S.carpet);
     // walls (0.3 thick, 5.2 high); east wall has a door gap at z 4..6.5 (police enter), west wall a gap at z -3.5..-1 (Lustig slips out)
     sb.add(boxGeo(V(RX0, 0, -1), V(RX0 + 0.3, RH, RZ1), 0), S.wall); // west wall, south of the door
     sb.add(boxGeo(V(RX0, 0, RZ0), V(RX0 + 0.3, RH, -3.5), 0), S.wall); // west wall, north of the door
@@ -296,19 +374,52 @@ export class World {
     // long table (top at y 0.8) + legs + chairs (legs, slatted backs, cushions — a chair
     // must read as a chair, not an empty rectangular frame)
     sb.add(boxGeo(V(-49, 0.75, 1.2), V(-43, 0.85, 2.8), 0), S.table);
+    sb.add(boxGeo(V(-48.8, 0.85, 1.45), V(-43.2, 0.87, 2.55), 0), S.carpet); // red table runner
+    // pale-wood inlay lines inset from the tabletop's long edges (Hairline Fig: one dim crease inside the silhouette)
+    sb.add(boxGeo(V(-48.9, 0.852, 1.32), V(-43.1, 0.86, 1.38), 0), M.wood);
+    sb.add(boxGeo(V(-48.9, 0.852, 2.62), V(-43.1, 0.86, 2.68), 0), M.wood);
+    // brass candlesticks at both ends of the table (they catch the warm salon light)
+    for (const [cx2, cz2] of [[-48.7, 1.5], [-43.3, 2.5]] as const) {
+      sb.add(new THREE.CylinderGeometry(0.09, 0.12, 0.06, 10).translate(0, 0, 0), S.brass,
+        new THREE.Matrix4().makeTranslation(cx2, 0.9, cz2));
+      sb.add(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8).translate(0, 0, 0), S.brass,
+        new THREE.Matrix4().makeTranslation(cx2, 1.06, cz2));
+      sb.add(new THREE.CylinderGeometry(0.035, 0.035, 0.22, 8).translate(0, 0, 0), S.white,
+        new THREE.Matrix4().makeTranslation(cx2, 1.3, cz2));
+    }
     for (const [lx, lz] of [[-48.6, 1.4], [-48.6, 2.6], [-43.4, 1.4], [-43.4, 2.6]] as const)
       sb.add(boxGeo(V(lx - 0.08, 0, lz - 0.08), V(lx + 0.08, 0.75, lz + 0.08), 0), S.table);
-    for (const [cx, cz, yaw] of [[-48.5, 0.55, 0], [-46.5, 0.55, 0], [-44.5, 0.55, 0], [-47.5, 3.45, Math.PI], [-44.5, 3.45, Math.PI], [-49.8, 2, Math.PI / 2]] as const) {
+    // Perbaikan 27 Nov (bill: karakter duduk ga keliatan duduk): the table chairs now sit
+    // UNDER the dealers — far chairs moved to z 0.9, near chairs to z 3.1 (they were
+    // 0.35 m behind the sitters, so everyone sat in front of an empty chair) — and the
+    // near-side chairs face the table (yaw 0, back NORTH behind the sitter). With yaw PI
+    // their backs stood between the camera and the sitter and hid every torso, leaving
+    // floating heads. One extra far chair at (-45.8, 0.9) for shot 4's dealerWho(0).
+    // Putaran 3 (27 Nov, referensi duduk bill): dudukan + bantal DITURUNKAN ke tinggi
+    // pinggul sitter dan tepi depannya DITARIK KE BELAKANG bidang kartu. Akar masalah:
+    // pinggul sitter ada di 0,43 m (toon.ts: hipY = sole - 0,89*HH) sementara dudukan
+    // lama di 0,48-0,54 m — sitter tenggelam 0,05-0,11 m ke dalam kursi — DAN bantal
+    // menjorok 0,02 m DI DEPAN kartu sehingga menutupi pita pinggul/paha (canvas
+    // 856-869), sementara muka depan dudukan yang sebidang dengan kartu menutupi pita
+    // bawah torso. Hasilnya: dudukan terbaca sebagai papan yang memotong badan dan kaki
+    // hanya garis tipis menjuntai di bawahnya ("menembus bangku", still4_555/1290).
+    // Sekarang: dudukan 0,48 x 0,27 m, atas 0,37 m, tepi depan 0,08 m DI BELAKANG kartu;
+    // bantal merah atas 0,43 m (= tinggi pinggul, paha berbaring tepat di atasnya), tepi
+    // depan 0,06 m di belakang kartu. Kursi seluruhnya di belakang bidang kartu, jadi
+    // tidak ada lagi yang menutupi paha/lutut/betis. Kaki depan digeser ke -0,12 supaya
+    // tetap di bawah dudukan; sandaran turun mengikuti (mulai 0,43 m).
+    const CHAIR_YAW = 0.89; // menghadap kamera salon (tenggara): sin/cos ~ (0,78, 0,63)
+    for (const [cx, cz, yaw] of [[-48.0, 0.9, CHAIR_YAW], [-46.5, 0.9, CHAIR_YAW], [-45.8, 0.9, CHAIR_YAW], [-45.2, 0.9, CHAIR_YAW], [-47.5, 3.1, CHAIR_YAW], [-45.7, 3.1, CHAIR_YAW], [-44.5, 3.1, CHAIR_YAW], [-49.8, 2, Math.PI / 2]] as const) {
       const m = new THREE.Matrix4().makeRotationY(yaw).setPosition(cx, 0, cz);
-      for (const [lx, lz] of [[-0.24, -0.24], [0.24, -0.24], [-0.24, 0.24], [0.24, 0.24]] as const)
-        sb.add(boxGeo(V(lx - 0.04, 0, lz - 0.04), V(lx + 0.04, 0.42, lz + 0.04), 0), S.chair, m); // legs
-      sb.add(boxGeo(V(-0.3, 0.4, -0.3), V(0.3, 0.48, 0.3), 0), S.chair, m); // seat
-      sb.add(boxGeo(V(-0.27, 0.48, -0.27), V(0.27, 0.54, 0.27), 0), S.carpet, m); // cushion
-      sb.add(boxGeo(V(-0.3, 0.54, -0.3), V(-0.22, 1.08, -0.22), 0), S.chair, m); // back posts
-      sb.add(boxGeo(V(0.22, 0.54, -0.3), V(0.3, 1.08, -0.22), 0), S.chair, m);
-      sb.add(boxGeo(V(-0.3, 0.98, -0.3), V(0.3, 1.08, -0.22), 0), S.chair, m); // top rail
-      sb.add(boxGeo(V(-0.1, 0.54, -0.3), V(-0.04, 0.98, -0.22), 0), S.chair, m); // slats
-      sb.add(boxGeo(V(0.04, 0.54, -0.3), V(0.1, 0.98, -0.22), 0), S.chair, m);
+      for (const [lx, lz] of [[-0.2, -0.31], [0.2, -0.31], [-0.2, -0.12], [0.2, -0.12]] as const)
+        sb.add(boxGeo(V(lx - 0.035, 0, lz - 0.035), V(lx + 0.035, 0.37, lz + 0.035), 0), S.chair, m); // legs
+      sb.add(boxGeo(V(-0.24, 0.29, -0.35), V(0.24, 0.37, -0.08), 0), S.chair, m); // seat: 0.48 x 0.27, top at 0.37, front edge 0.08 BEHIND the sitter's card
+      sb.add(boxGeo(V(-0.28, 0.37, -0.33), V(0.28, 0.43, -0.06), 0), S.carpet, m); // red cushion, top at hip height (0.43), front edge behind the card
+      sb.add(boxGeo(V(-0.24, 0.43, -0.35), V(-0.18, 1.08, -0.27), 0), S.chair, m); // back posts
+      sb.add(boxGeo(V(0.18, 0.43, -0.35), V(0.24, 1.08, -0.27), 0), S.chair, m);
+      sb.add(boxGeo(V(-0.24, 0.98, -0.35), V(0.24, 1.08, -0.27), 0), S.chair, m); // top rail
+      sb.add(boxGeo(V(-0.08, 0.43, -0.35), V(-0.03, 0.98, -0.27), 0), S.chair, m); // slats
+      sb.add(boxGeo(V(0.03, 0.43, -0.35), V(0.08, 0.98, -0.27), 0), S.chair, m);
     }
     // framed landscape painting on the north wall above the wainscot (fills the big empty wall).
     // It sits on the wall's west end (x -54..-51): that is the stretch the salon camera actually sees.
@@ -347,7 +458,7 @@ export class World {
     }
     sb.add(boxGeo(V(-46.03, chY, 1.97), V(-45.97, 5.2, 2.03), 0), S.brass); // chain to the ceiling
     // the miniature Eiffel Tower on the table (the pitch prop): 1 m tall, base at the table top
-    towerAt(sb, M.towerIron, TABLE_POS[0], TABLE_POS[2], 0.014, 0.85);
+    towerAt(sb, M.towerIron, M.towerIronDark, M.stone, TABLE_POS[0], TABLE_POS[2], 0.014, 0.85);
     sb.build(R);
 
     // ---- the Vienna cafe terrace (east): round tables, chairs, striped awning, potted plants ----
@@ -373,21 +484,43 @@ export class World {
       cb.add(boxGeo(V(-0.09, 0.51, -0.28), V(-0.03, 0.9, -0.2), 0), C.chair, m); // slats
       cb.add(boxGeo(V(0.03, 0.51, -0.28), V(0.09, 0.9, -0.2), 0), C.chair, m);
     };
-    cafeTable(38.5, 26); cafeTable(38.0, 27.8); cafeTable(43, 23);
-    cafeChair(38.5, 27.6, 0); cafeChair(38.0, 28.6, Math.PI); cafeChair(43, 24.6, Math.PI);
+    cafeTable(38.5, 26); cafeTable(37.8, 28.2); cafeTable(43, 23);
+    // Tahap 6: Lustig's chair moved to the NORTH side of his table (z 24.9, backrest north, facing
+    // south to the table) to match his new seat at z 25.2; the patron's chair likewise (z 27.3,
+    // facing south to his table at z 28.2) — the old chairs sat south of both men and their
+    // backrests hid the sitters from the southeast cameras
+    cafeChair(38.5, 24.9, 0); cafeChair(37.8, 27.3, 0); cafeChair(43, 24.6, Math.PI);
     // striped awning over the terrace, tilted so its striped underside faces the low cafe camera
     // (rotation.x positive: the south edge by the camera is low, the north edge high), raised so
     // it reads as a canopy overhead without covering the people at the tables; posts cut to the
     // tilted edge heights at their z
-    const awn = new THREE.Matrix4().makeRotationX(0.35).setPosition(39, 3.8, 26.5);
-    cb.add(boxGeo(V(-4.5, 0, -2.5), V(4.5, 0.06, 2.5), 0), C.awning, awn);
-    cb.add(boxGeo(V(35 - 0.06, 0, 24.5 - 0.06), V(35 + 0.06, 4.5, 24.5 + 0.06), 0), C.brass);
-    cb.add(boxGeo(V(43 - 0.06, 0, 28.5 - 0.06), V(43 + 0.06, 3.1, 28.5 + 0.06), 0), C.brass);
+    // Tahap 6: raised to y 4.6 and shrunk to +/-3.6 x +/-1.8 — at y 3.8 it filled ~35% of the top
+    // of the cafe frames (still2_240/930); the posts moved to the new corners (35.4, 24.0) and
+    // (42.6, 27.6) with heights matching the tilted plane (5.2 north, 4.0 south)
+    const awn = new THREE.Matrix4().makeRotationX(0.35).setPosition(39, 4.6, 25.8);
+    cb.add(boxGeo(V(-3.6, 0, -1.8), V(3.6, 0.06, 1.8), 0), C.awning, awn);
+    cb.add(boxGeo(V(35.4 - 0.06, 0, 24.0 - 0.06), V(35.4 + 0.06, 5.2, 24.0 + 0.06), 0), C.brass);
+    cb.add(boxGeo(V(42.6 - 0.06, 0, 27.6 - 0.06), V(42.6 + 0.06, 4.0, 27.6 + 0.06), 0), C.brass);
+    // standing menu board north-west of Lustig's table, on the cafe cameras' look axis —
+    // it fills the empty tiles behind the table in shots 2/6
+    const mb = new THREE.Matrix4().makeRotationY(0.5).setPosition(35.5, 0, 23.0);
+    cb.add(boxGeo(V(-0.45, 0, -0.03), V(0.45, 1.25, 0.03), 0), C.chair, mb); // board
+    cb.add(boxGeo(V(-0.5, 1.25, -0.04), V(0.5, 1.32, 0.04), 0), C.chair, mb); // top bar
+    for (const ly of [1.05, 0.85, 0.65, 0.45] as const)
+      cb.add(boxGeo(V(-0.32, ly, 0.03), V(0.32, ly + 0.05, 0.05), 0), C.table, mb); // chalk lines
+    cb.add(boxGeo(V(-0.4, 0, -0.05), V(-0.32, 0.5, 0.05), 0), C.chair, mb); // legs
+    cb.add(boxGeo(V(0.32, 0, -0.05), V(0.4, 0.5, 0.05), 0), C.chair, mb);
+    // wooden planter at the bottom edge of the cafe shots' frames (foreground framing)
+    // Tahap 6: moved to (45, 29.0) and the bush shrunk (1.0 -> 0.55) — at (42, 30.5) it filled
+    // ~25% of the bottom of the cafe frames (still2_240)
+    cb.add(boxGeo(V(45 - 0.8, 0, 29.0 - 0.35), V(45 + 0.8, 0.7, 29.0 + 0.35), 0), C.chair);
     cb.build(R);
-    // potted plants around the terrace (kept clear of the waiter at 36.2, 24.5)
+    // potted plants around the terrace (kept clear of the waiter at 36.2, 24.5):
+    // the plant that used to sit behind the waiter's legs moved north-west, still in frame
     const pb = new Batch();
-    for (const [x, z] of [[33.5, 22.5], [43.5, 29], [33, 28], [44, 21.5]] as const)
+    for (const [x, z] of [[35.5, 21.5], [43.5, 29], [33, 28], [44, 21.5]] as const)
       prop(pb, kit, "plant_bush", x, 0, z, 1.1, x);
+    prop(pb, kit, "plant_bush", 45, 0.7, 29.0, 0.55, 45); // bush on the foreground planter (Tahap 6: shrunk from 1.0)
     pb.build(R);
 
     // the CAM agent's near framing objects: built once, toggled per frame (kitClone may return null — skip those)
@@ -440,6 +573,11 @@ export class World {
     this.sun.shadow.bias = L.bias; this.sun.shadow.normalBias = L.normalBias * (Rr / 12);
     this.fill.intensity = 0;
     TONE.uLitCol.value.set(...L.lit); TONE.uShadeCol.value.set(...L.shade); TONE.uShadeLift.value.set(...L.lift);
+    // tower iron shade: warm brown by day (its south face never sees the sun — the day preset's
+    // blue-grey shade+lift turned it lavender, still2_075); golden/warm keep the preset's own
+    // values, so the sunset silhouette stays blue-purple
+    if (s.light === "day") { TOWER_TONE.uShadeCol.value.set(0.46, 0.38, 0.28); TOWER_TONE.uShadeLift.value.set(0.1, 0.07, 0.04); }
+    else { TOWER_TONE.uShadeCol.value.set(...L.shade); TOWER_TONE.uShadeLift.value.set(...L.lift); }
     TONE.uLambert.value = L.lambert; TONE.uSideK.value = L.sideK; TONE.uTerm.value = L.term; TONE.uBounce.value.set(...LOOK[s.light].bounce); TONE.uSat.value = LOOK[s.light].sat;
     CHAR.uCharTint.value.set(...L.charTint); CHAR.uCharShade.value = L.charShade; CHAR.uGrad.value = L.charGrad;
     CHAR.uBodyGrad.value = L.bodyGrad; CHAR.uSideTint.value.set(...L.sideTint);
@@ -509,6 +647,82 @@ export class World {
     return focus;
   }
 }
+
+/** a street lamp, built from code (the lantern GLB never loads): stone base, iron pole,
+ *  amber glass head with a brass cap and finial. 3.75 m tall. */
+const lampPost = (b: Batch, M: Mats, x: number, z: number) => {
+  b.add(boxGeo(V(x - 0.25, 0, z - 0.25), V(x + 0.25, 0.6, z + 0.25), 0), M.stone);
+  beamBetween(b, M.towerIronDark, x, 0.5, z, x, 3.0, z, 0.1);
+  b.add(boxGeo(V(x - 0.21, 3.0, z - 0.21), V(x + 0.21, 3.08, z + 0.21), 0), M.brass);
+  b.add(boxGeo(V(x - 0.15, 3.08, z - 0.15), V(x + 0.15, 3.45, z + 0.15), 0), M.lampGlass);
+  b.add(boxGeo(V(x - 0.21, 3.45, z - 0.21), V(x + 0.21, 3.53, z + 0.21), 0), M.brass);
+  b.add(boxGeo(V(x - 0.04, 3.53, z - 0.04), V(x + 0.04, 3.75, z + 0.04), 0), M.brass);
+};
+
+/** a 9 m flag pole with a tricolore flag (blue-white-red) flying toward the plaza centre */
+const flagPole = (b: Batch, M: Mats, x: number, z: number) => {
+  beamBetween(b, M.towerIronDark, x, 0, z, x, 11, z, 0.12);
+  const d = x < 0 ? 1 : -1;
+  const cols = [M.flagBlue, M.white, M.red];
+  for (let i = 0; i < 3; i++) {
+    const x0 = x + d * i * 1.2, x1 = x + d * (i + 1) * 1.2;
+    b.add(boxGeo(V(Math.min(x0, x1), 9.4, z - 0.025), V(Math.max(x0, x1), 10.4, z + 0.025), 0), cols[i]);
+  }
+};
+
+/** a bird in flight: two thin bars in a shallow V, high over the street */
+const bird = (b: Batch, M: Mats, x: number, y: number, z: number) => {
+  beamBetween(b, M.woodDark, x, y, z, x - 0.5, y + 0.15, z, 0.06);
+  beamBetween(b, M.woodDark, x, y, z, x + 0.5, y + 0.15, z, 0.06);
+};
+
+/** a market stall: four posts, a counter, a striped canopy, two crates with fruit */
+const marketStall = (b: Batch, M: Mats, x: number, z: number, yaw: number) => {
+  const m = new THREE.Matrix4().makeRotationY(yaw).setPosition(x, 0, z);
+  for (const [px, pz] of [[-1.1, -0.8], [1.1, -0.8], [-1.1, 0.8], [1.1, 0.8]] as const)
+    b.add(boxGeo(V(px - 0.04, 0, pz - 0.04), V(px + 0.04, 2.2, pz + 0.04), 0), M.wood, m);
+  b.add(boxGeo(V(-1.2, 0, -0.6), V(1.2, 0.9, 0.6), 0), M.wood, m); // counter
+  b.add(boxGeo(V(-1.3, 2.2, -0.8), V(1.3, 2.26, 0.8), 0), M.awning, m); // canopy
+  b.add(boxGeo(V(-0.9, 0.9, -0.25), V(-0.3, 1.25, 0.25), 0), M.woodDark, m); // crates
+  b.add(boxGeo(V(0.3, 0.9, -0.25), V(0.9, 1.25, 0.25), 0), M.woodDark, m);
+  for (let i = 0; i < 3; i++) {
+    b.add(boxGeo(V(-0.85 + i * 0.2, 1.25, -0.1), V(-0.71 + i * 0.2, 1.39, 0.1), 0), M.red, m); // apples
+    b.add(boxGeo(V(0.35 + i * 0.2, 1.25, -0.1), V(0.49 + i * 0.2, 1.39, 0.1), 0), M.lampGlass, m); // lemons
+  }
+};
+
+/** a market cart, built from code (the cart GLB never loads): bed, spoked-looking wheels,
+ *  handles, four canopy posts, a striped canopy, two crates with fruit */
+const marketCart = (b: Batch, M: Mats, x: number, z: number, yaw: number) => {
+  const m = new THREE.Matrix4().makeRotationY(yaw).setPosition(x, 0, z);
+  b.add(boxGeo(V(-1.1, 0.85, -0.6), V(1.1, 1.0, 0.6), 0), M.wood, m); // bed
+  b.add(boxGeo(V(-1.1, 1.0, -0.6), V(1.1, 1.3, -0.54), 0), M.woodDark, m); // sides
+  b.add(boxGeo(V(-1.1, 1.0, 0.54), V(1.1, 1.3, 0.6), 0), M.woodDark, m);
+  b.add(boxGeo(V(-0.04, 0.45, -0.7), V(0.04, 0.45, 0.7), 0), M.woodDark, m); // axle
+  for (const wz of [-0.65, 0.65] as const) {
+    const wm = m.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.45, wz)).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+    b.add(new THREE.CylinderGeometry(0.45, 0.45, 0.1, 14).translate(0, 0, 0), M.woodDark, wm);
+    const hub = m.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.45, wz)).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+    b.add(new THREE.CylinderGeometry(0.12, 0.12, 0.14, 10).translate(0, 0, 0), M.brass, hub);
+  }
+  b.add(boxGeo(V(-0.54, 0.72, -1.6), V(-0.46, 0.8, -0.6), 0), M.wood, m); // handles
+  b.add(boxGeo(V(0.46, 0.72, -1.6), V(0.54, 0.8, -0.6), 0), M.wood, m);
+  for (const [px, pz] of [[-1.0, -0.5], [1.0, -0.5], [-1.0, 0.5], [1.0, 0.5]] as const)
+    b.add(boxGeo(V(px - 0.03, 1.0, pz - 0.03), V(px + 0.03, 2.2, pz + 0.03), 0), M.wood, m); // canopy posts
+  b.add(boxGeo(V(-1.2, 2.2, -0.7), V(1.2, 2.26, 0.7), 0), M.awning, m); // canopy
+  b.add(boxGeo(V(-0.8, 1.0, -0.3), V(-0.2, 1.4, 0.3), 0), M.woodDark, m); // crates
+  b.add(boxGeo(V(0.2, 1.0, -0.3), V(0.8, 1.4, 0.3), 0), M.woodDark, m);
+  for (let i = 0; i < 3; i++) {
+    b.add(boxGeo(V(-0.75 + i * 0.2, 1.4, -0.1), V(-0.61 + i * 0.2, 1.54, 0.1), 0), M.red, m); // apples
+    b.add(boxGeo(V(0.25 + i * 0.2, 1.4, -0.1), V(0.39 + i * 0.2, 1.54, 0.1), 0), M.lampGlass, m); // lemons
+  }
+};
+
+/** a low stone planter with a bush on top, for foreground framing */
+const planter = (b: Batch, kit: Kit, M: Mats, x: number, z: number) => {
+  b.add(boxGeo(V(x - 0.7, 0, z - 0.3), V(x + 0.7, 0.7, z + 0.3), 0), M.stone);
+  prop(b, kit, "plant_bush", x, 0.7, z, 0.6, x); // Tahap 6: 0.9 -> 0.6, the foreground bushes were giant blobs
+};
 
 /** a simple park bench: two leg frames, a seat slab with a cushion, a slatted back.
  *  The back is on the local -z side, so yaw 0 faces the sitter toward +z. */

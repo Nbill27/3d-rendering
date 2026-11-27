@@ -10,6 +10,17 @@ export const TONE = {
   uBounce: { value: new THREE.Vector3() }, // warm bounce on shaded faces turned to the camera (golden only; day = 0)
   uSat: { value: 1 }, // world albedo saturation around its luminance (characters are not twoTone, so unaffected)
 };
+/** Per-material shade/lift override for the Eiffel Tower's iron (world.ts): the tower's south face
+ *  never sees the day sun (az 75), so under the day preset's blue-grey shade [0.3, 0.29, 0.36] +
+ *  blue lift [0.05, 0.06, 0.11] it reads grey-lavender no matter how brown the albedo is — the lift
+ *  alone (B 0.11 vs G 0.06) beats any albedo, proven by the #9a6830 brightening changing nothing
+ *  in still2_075. The tower gets its own shade/lift uniforms, driven per preset by world.ts:
+ *  warm brown by day, the preset's own values at golden hour (so the blue-purple sunset
+ *  silhouette stays). Values below are the warm preset's shade/lift, proven to read warm brown. */
+export const TOWER_TONE = {
+  uShadeCol: { value: new THREE.Vector3(0.46, 0.38, 0.28) },
+  uShadeLift: { value: new THREE.Vector3(0.1, 0.07, 0.04) },
+};
 /** character-card uniforms (lighting.md 9.2 cardShade); world.ts keeps them in sync with LIGHTS for cardshade.ts */
 export const CHAR = {
   uCharTint: { value: new THREE.Vector3(1, 0.94, 0.92) }, uCharShade: { value: 0.86 }, uGrad: { value: 0.07 },
@@ -43,16 +54,19 @@ const TWO_TONE = /* glsl */ `
 `;
 const DECL = "#include <common>\nuniform vec3 uLitCol; uniform vec3 uShadeCol; uniform vec3 uShadeLift; uniform float uLambert; uniform float uSideK; uniform float uTerm; uniform vec3 uBounce; uniform float uSat;";
 
-/** Lambert (or Phong: its specular term is kept, masked by the shadow) -> two-tone. Call once per material. */
-export function twoTone<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(m: T, liftK = 1): T {
+/** Lambert (or Phong: its specular term is kept, masked by the shadow) -> two-tone. Call once per material.
+ *  `over` swaps the shared shade/lift uniforms for per-material ones (the tower's TOWER_TONE);
+ *  the cache key changes with it so the override gets its own program. */
+export function twoTone<T extends THREE.Material>(m: T, liftK = 1, over?: { shade: { value: THREE.Vector3 }; lift: { value: THREE.Vector3 } }): T {
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, TONE);
+    if (over) { sh.uniforms.uShadeCol = over.shade; sh.uniforms.uShadeLift = over.lift; }
     sh.fragmentShader = sh.fragmentShader
       .replace("#include <common>", DECL + `\n#define LIFT_K ${liftK.toFixed(3)}`)
       .replace("#include <lights_fragment_begin>", "float sunVis = 1.0;\n" + LFB)
       .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + TWO_TONE);
   };
-  m.customProgramCacheKey = () => "twoTone5_" + liftK.toFixed(3);
+  m.customProgramCacheKey = () => "twoTone5_" + liftK.toFixed(3) + (over ? "_over" : "");
   return m;
 }
 
