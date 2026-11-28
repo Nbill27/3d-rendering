@@ -26,6 +26,7 @@ import { Video20 } from "./videos/v20/Video20";
 import { Video21 } from "./videos/v21/Video21";
 import { Video22 } from "./videos/v22/Video22";
 import { Video22Fail2Install } from "./videos/v22-fail2install/Video22Fail2Install";
+import { Video23 } from "./videos/v23/Video23";
 
 export const MyComposition = () => {
   return (
@@ -241,6 +242,14 @@ export const MyComposition = () => {
       <Composition
         id="Video22"
         component={Video22}
+        durationInFrames={1800}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="Video23"
+        component={Video23}
         durationInFrames={1800}
         fps={30}
         width={1080}
