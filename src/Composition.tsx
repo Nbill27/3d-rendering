@@ -41,7 +41,7 @@ export const MyComposition = () => {
       <Composition
         id="VideoKedua"
         component={VideoKedua}
-        durationInFrames={1680}
+        durationInFrames={1800}
         fps={30}
         width={1920}
         height={1080}
@@ -49,34 +49,34 @@ export const MyComposition = () => {
       <Composition
         id="VideoKetiga"
         component={VideoKetiga}
-        durationInFrames={1680}
+        durationInFrames={1800}
         fps={30}
-        width={1920}
-        height={1080}
+        width={1080}
+        height={1920}
       />
       <Composition
         id="VideoFinal"
         component={VideoFinal}
-        durationInFrames={1680}
+        durationInFrames={1800}
         fps={30}
-        width={1920}
-        height={1080}
+        width={1080}
+        height={1920}
       />
       <Composition
         id="VideoChibi"
         component={VideoChibi}
-        durationInFrames={1680}
+        durationInFrames={1800}
         fps={30}
-        width={1920}
-        height={1080}
+        width={1080}
+        height={1920}
       />
       <Composition
         id="MotionSample"
         component={MotionSample}
-        durationInFrames={1680}
+        durationInFrames={180}
         fps={30}
-        width={1920}
-        height={1080}
+        width={1080}
+        height={1920}
       />
       <Composition
         id="Video02"
