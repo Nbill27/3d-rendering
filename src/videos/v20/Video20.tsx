@@ -77,7 +77,6 @@ const BeanHead: React.FC<{
   pose?: CharPose;
   expr?: Expr;
   local?: number;
-  speaking?: boolean;
 }> = ({
   x,
   y,
@@ -86,7 +85,6 @@ const BeanHead: React.FC<{
   pose = "stand",
   expr = "smile",
   local = 0,
-  speaking = false,
 }) => {
   const uid = useId().replace(/:/g, "");
   const walking = pose === "walk";
@@ -103,7 +101,6 @@ const BeanHead: React.FC<{
   const armLiftL = walking && !leftLifting ? 6 * liftPhase : 0;
   const armLiftR = walking && leftLifting ? 6 * liftPhase : 0;
   const blink = local % 90 < 4;
-  const mouthOpen = 6 + Math.abs(Math.sin(local * 0.55)) * 5;
   // Lambaian tangan (pose wave): naik-turun pelan, bukan putaran.
   const waveY = pose === "wave" ? Math.sin(local * 0.25) * 8 : 0;
 
@@ -238,9 +235,6 @@ const BeanHead: React.FC<{
   };
 
   const mouth = () => {
-    if (speaking && (expr === "stern" || expr === "worried" || expr === "smile" || expr === "content")) {
-      return <ellipse cx={MX} cy={MY} rx={10} ry={mouthOpen} fill={MOUTH_DARK} stroke={INK} strokeWidth={3} />;
-    }
     switch (expr) {
       case "amazed":
         return <ellipse cx={MX + 4} cy={MY} rx={7} ry={8} fill={MOUTH_DARK} stroke={INK} strokeWidth={3} />;
@@ -749,45 +743,45 @@ const PhotoFrame: React.FC = () => (
   </div>
 );
 
-const Scene1: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
+const Scene1: React.FC<{ local: number }> = ({ local }) => (
   <AbsoluteFill>
     {/* Hook: tiga bendera berdampingan di gurun — tiga negara, satu perang. */}
     <FlagTrio x={227} y={480} scale={1.0} local={local} />
   </AbsoluteFill>
 );
 
-const Scene2: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
+const Scene2: React.FC<{ local: number }> = ({ local }) => (
   <AbsoluteFill>
     {/* Dua pekerja oficina di depan mesin salitrera (3D); satu menunjuk. */}
     <ContactShadow x={80} y={700} scale={1.35} />
-    <BeanHead x={80} y={700} scale={1.35} kind="miner" pose="stand" expr="content" speaking={speaking} local={local} />
+    <BeanHead x={80} y={700} scale={1.35} kind="miner" pose="stand" expr="content" local={local} />
     <ContactShadow x={700} y={720} scale={1.2} />
-    <BeanHead x={700} y={720} scale={1.2} kind="miner" pose="point" expr="smile" speaking={speaking} local={local} />
+    <BeanHead x={700} y={720} scale={1.2} kind="miner" pose="point" expr="smile" local={local} />
   </AbsoluteFill>
 );
 
-const Scene3: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
+const Scene3: React.FC<{ local: number }> = ({ local }) => (
   <AbsoluteFill>
     {/* Timbangan: guano lawan koin emas; pekerja tertawa (absurd, SNAP "^ ^"). */}
     <ScaleProp x={430} y={900} scale={1.15} local={local} />
     <ContactShadow x={60} y={700} scale={1.3} />
-    <BeanHead x={60} y={700} scale={1.3} kind="miner" pose="point" expr="laugh" speaking={speaking} local={local} />
+    <BeanHead x={60} y={700} scale={1.3} kind="miner" pose="point" expr="laugh" local={local} />
   </AbsoluteFill>
 );
 
-const Scene4: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
+const Scene4: React.FC<{ local: number }> = ({ local }) => (
   <AbsoluteFill>
     {/* Pejabat Bolivia (marah, mata "> <", SNAP) menunjukkan surat pajak;
         pemilik perusahaan menolak membayar (khawatir, keringat). */}
     <ContactShadow x={100} y={680} scale={1.35} />
-    <BeanHead x={100} y={680} scale={1.35} kind="official" pose="point" expr="angry" speaking={speaking} local={local} />
+    <BeanHead x={100} y={680} scale={1.35} kind="official" pose="point" expr="angry" local={local} />
     <ContactShadow x={700} y={700} scale={1.2} />
-    <BeanHead x={700} y={700} scale={1.2} kind="owner" pose="worried" expr="worried" speaking={speaking} local={local} />
+    <BeanHead x={700} y={700} scale={1.2} kind="owner" pose="worried" expr="worried" local={local} />
     <TaxPaper x={310} y={1000} scale={0.8} rot={-8} local={local} />
   </AbsoluteFill>
 );
 
-const Scene5: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => {
+const Scene5: React.FC<{ local: number }> = ({ local }) => {
   // Tiga prajurit Chile berjalan maju ke pelabuhan (aturan jalan: kaki
   // kanan lalu kiri mengangkat ke ATAS, badan maju ke DEPAN, tanpa
   // goyang kiri-kanan; x tetap, y/scale naik pelan = maju ke kamera).
@@ -800,28 +794,28 @@ const Scene5: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
   return (
     <AbsoluteFill>
       <ContactShadow x={0} y={yL} scale={sL} />
-      <BeanHead x={0} y={yL} scale={sL} kind="chilean" pose="walk" expr="stern" speaking={speaking} local={local} />
+      <BeanHead x={0} y={yL} scale={sL} kind="chilean" pose="walk" expr="stern" local={local} />
       <ContactShadow x={340} y={yB} scale={sB} />
-      <BeanHead x={340} y={yB} scale={sB} kind="chilean" pose="walk" expr="stern" speaking={speaking} local={local} />
+      <BeanHead x={340} y={yB} scale={sB} kind="chilean" pose="walk" expr="stern" local={local} />
       <ContactShadow x={700} y={yR} scale={sR} />
-      <BeanHead x={700} y={yR} scale={sR} kind="chilean" pose="walk" expr="stern" speaking={speaking} local={local} />
+      <BeanHead x={700} y={yR} scale={sR} kind="chilean" pose="walk" expr="stern" local={local} />
     </AbsoluteFill>
   );
 };
 
-const Scene6: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
+const Scene6: React.FC<{ local: number }> = ({ local }) => (
   <AbsoluteFill>
     {/* Perjanjian rahasia: pejabat Bolivia + perwira Peru berhadapan dalam
         bayangan; surat perjanjian jatuh dari atas meja. */}
     <ContactShadow x={80} y={680} scale={1.3} />
-    <BeanHead x={80} y={680} scale={1.3} kind="official" pose="stand" expr="stern" speaking={speaking} local={local} />
+    <BeanHead x={80} y={680} scale={1.3} kind="official" pose="stand" expr="stern" local={local} />
     <ContactShadow x={700} y={680} scale={1.3} />
-    <BeanHead x={700} y={680} scale={1.3} kind="peruvian" pose="stand" expr="stern" speaking={speaking} local={local} />
+    <BeanHead x={700} y={680} scale={1.3} kind="peruvian" pose="stand" expr="stern" local={local} />
     <DeclarationPaper x={400} y={900} scale={0.9} local={local} />
   </AbsoluteFill>
 );
 
-const Scene7: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
+const Scene7: React.FC<{ local: number }> = ({ local }) => (
   <AbsoluteFill>
     {/* Pertempuran laut Iquique sepenuhnya 3D: Huascar (menara berputar,
         menembak) lawan Esmeralda (miring, tenggelam pelan). Hormat: tanpa
@@ -829,7 +823,7 @@ const Scene7: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
   </AbsoluteFill>
 );
 
-const Scene8: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => {
+const Scene8: React.FC<{ local: number }> = ({ local }) => {
   // Tiga prajurit Chile berjalan maju di darat Tacna (pola jalan sama
   // seperti S5); meriam Krupp 3D menembak sekali di belakang mereka.
   const yL = 720 + Math.min(local / 60, 1) * 70;
@@ -841,16 +835,16 @@ const Scene8: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
   return (
     <AbsoluteFill>
       <ContactShadow x={0} y={yL} scale={sL} />
-      <BeanHead x={0} y={yL} scale={sL} kind="chilean" pose="walk" expr="stern" speaking={speaking} local={local} />
+      <BeanHead x={0} y={yL} scale={sL} kind="chilean" pose="walk" expr="stern" local={local} />
       <ContactShadow x={340} y={yB} scale={sB} />
-      <BeanHead x={340} y={yB} scale={sB} kind="chilean" pose="walk" expr="stern" speaking={speaking} local={local} />
+      <BeanHead x={340} y={yB} scale={sB} kind="chilean" pose="walk" expr="stern" local={local} />
       <ContactShadow x={700} y={yR} scale={sR} />
-      <BeanHead x={700} y={yR} scale={sR} kind="chilean" pose="walk" expr="stern" speaking={speaking} local={local} />
+      <BeanHead x={700} y={yR} scale={sR} kind="chilean" pose="walk" expr="stern" local={local} />
     </AbsoluteFill>
   );
 };
 
-const Scene9: React.FC<{ local: number; speaking: boolean }> = () => (
+const Scene9: React.FC<{ local: number }> = () => (
   <AbsoluteFill>
     {/* Penutup: peta (f1450-1610) lalu foto Huascar 1903 (f1700-1800).
         Kata kunci HILANG muncul di antara keduanya (local 170-255),
@@ -858,7 +852,7 @@ const Scene9: React.FC<{ local: number; speaking: boolean }> = () => (
   </AbsoluteFill>
 );
 
-const SCENES: React.FC<{ local: number; speaking: boolean }>[] = [
+const SCENES: React.FC<{ local: number }>[] = [
   Scene1, Scene2, Scene3, Scene4, Scene5, Scene6, Scene7, Scene8, Scene9,
 ];
 
@@ -912,7 +906,6 @@ export const Video20: React.FC = () => {
   const panY = 0;
 
   const phrase = KARAOKE.find((p) => frame >= p.startFrame && frame <= p.endFrame);
-  const speaking = !!phrase;
   const bw = BEAT_WORDS[scene];
   const showBeatWord = !!bw && !showMap && !showPhoto && local >= bw.at && local < bw.at + bw.dur;
 
@@ -921,7 +914,7 @@ export const Video20: React.FC = () => {
     <AbsoluteFill style={{ background: "#dcc49a" }}>
       <div style={{ position: "absolute", inset: 0, transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`, transformOrigin: "50% 55%" }}>
         <World3D scene={scene} local={local} />
-        {!showMap && !showPhoto && <Current local={local} speaking={speaking} />}
+        {!showMap && !showPhoto && <Current local={local} />}
         {showMap && <MapOverlay local={local} />}
         {showPhoto && <PhotoFrame />}
       </div>
