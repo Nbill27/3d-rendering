@@ -131,8 +131,8 @@ jobs:
           merge-multiple: true
 
       - name: Publish chunks to release video21-render
-       env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -l chunks/
           test $(ls chunks/video21-chunk-*.mp4 | wc -l) = "15"
