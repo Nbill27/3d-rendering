@@ -9,6 +9,8 @@
 // Layout FORMAT.md: kicker + chip EP 01, judul pendek, rel langkah
 // vertikal 5 titik di kiri, panggung diagram, angka hero tabular-nums,
 // strip kode mono maks 2 baris, satu kalimat penjelas, zona aman bawah 300px.
+// Kalimat penjelas adalah subtitle karaoke (revisi 28 Nov 2026, perintah
+// bill): tiap kata oranye hanya saat diucapkan VO, kata lain putih hangat.
 // Motion: Corporate 200-400ms, easing cubic-bezier(0.2,0,0,1),
 // tiga layer (primary, secondary, ambient), reveal node lalu edge lalu
 // label, stagger 6-10 frame, total stagger di bawah 500ms.
@@ -247,11 +249,19 @@ const CodeStrip: React.FC<{
   </div>
 );
 
-type CaptionPart = { t: string; hl?: boolean };
+type KaraokeWord = { t: string; start: number; end: number };
 
-const Caption: React.FC<{ parts: CaptionPart[]; local: number }> = ({
-  parts,
+// Subtitle karaoke (revisi 28 Nov 2026, perintah bill): kalimat penjelas
+// dipecah per kata, hanya kata yang sedang diucapkan VO yang oranye,
+// kata lain putih hangat. start/end dalam detik absolut video (mix.wav).
+// Slide 3, 4, 5: waktu kata langsung dari WhisperX mix.json. Slide 1, 2:
+// kalimat caption adalah ringkasan yang urutan katanya beda dari urutan VO,
+// jadi waktu kata adalah distribusi proporsional per panjang kata di dalam
+// rentang WhisperX yang terukur (lihat SKILL_CHECKLIST.md).
+const Caption: React.FC<{ words: KaraokeWord[]; local: number; time: number }> = ({
+  words,
   local,
+  time,
 }) => (
   <div
     style={{
@@ -268,11 +278,14 @@ const Caption: React.FC<{ parts: CaptionPart[]; local: number }> = ({
       ...enterStyle(local, 40, 12),
     }}
   >
-    {parts.map((p, i) => (
-      <span key={i} style={p.hl ? { color: ACCENT } : undefined}>
-        {p.t}
-      </span>
-    ))}
+    {words.map((w, i) => {
+      const active = time >= w.start && time < w.end;
+      return (
+        <span key={i} style={active ? { color: ACCENT } : undefined}>
+          {w.t}
+        </span>
+      );
+    })}
   </div>
 );
 
@@ -282,10 +295,11 @@ const Chrome: React.FC<{
   local: number;
   code?: React.ReactNode[];
   dividerAfter?: number;
-  caption: CaptionPart[];
+  caption: KaraokeWord[];
   children: React.ReactNode;
   stageScale?: number;
-}> = ({ title, activeStep, local, code, dividerAfter, caption, children, stageScale = 1 }) => (
+  time: number;
+}> = ({ title, activeStep, local, code, dividerAfter, caption, children, stageScale = 1, time }) => (
   <AbsoluteFill style={{ background: BG, fontFamily: SANS }}>
     <Waves />
     <div
@@ -352,7 +366,7 @@ const Chrome: React.FC<{
       {children}
     </div>
     {code && <CodeStrip lines={code} local={local} dividerAfter={dividerAfter} />}
-    <Caption parts={caption} local={local} />
+    <Caption words={caption} local={local} time={time} />
   </AbsoluteFill>
 );
 
@@ -421,10 +435,17 @@ const Slide1: React.FC<{ local: number }> = ({ local }) => {
       title="Stok Jadi Minus"
       activeStep={0}
       local={local}
+      time={local / FPS}
       caption={[
-        { t: "Dua orang beli " },
-        { t: "barang terakhir", hl: true },
-        { t: " di detik yang sama." },
+        { t: "Dua ", start: 0.111, end: 0.382 },
+        { t: "orang ", start: 0.382, end: 0.833 },
+        { t: "beli ", start: 0.833, end: 1.194 },
+        { t: "barang ", start: 1.194, end: 1.736 },
+        { t: "terakhir ", start: 1.736, end: 2.458 },
+        { t: "di ", start: 2.458, end: 2.639 },
+        { t: "detik ", start: 2.639, end: 3.09 },
+        { t: "yang ", start: 3.09, end: 3.451 },
+        { t: "sama.", start: 3.451, end: 3.812 },
       ]}
     >
       <div
@@ -542,6 +563,7 @@ const Slide2: React.FC<{ local: number }> = ({ local }) => {
       title="Keduanya Baca 1"
       activeStep={1}
       local={local}
+      time={(270 + local) / FPS}
       code={[
         <>SELECT stok FROM produk WHERE id = 1;</>,
         <span key="r" style={{ color: SLATE }}>
@@ -549,9 +571,15 @@ const Slide2: React.FC<{ local: number }> = ({ local }) => {
         </span>,
       ]}
       caption={[
-        { t: "Keduanya " },
-        { t: "baca stok 1", hl: true },
-        { t: ", sebelum ada yang sempat menulis." },
+        { t: "Keduanya ", start: 11.115, end: 12.7 },
+        { t: "baca ", start: 12.7, end: 13.493 },
+        { t: "stok ", start: 13.493, end: 14.285 },
+        { t: "1, ", start: 14.285, end: 14.484 },
+        { t: "sebelum ", start: 14.484, end: 15.871 },
+        { t: "ada ", start: 15.871, end: 16.465 },
+        { t: "yang ", start: 16.465, end: 17.258 },
+        { t: "sempat ", start: 17.258, end: 18.447 },
+        { t: "menulis.", start: 18.447, end: 19.834 },
       ]}
     >
       <svg
@@ -721,6 +749,7 @@ const Slide3: React.FC<{ local: number }> = ({ local }) => {
       title="1, 0, Minus 1"
       activeStep={2}
       local={local}
+      time={(660 + local) / FPS}
       stageScale={zoom}
       code={[
         <>A: stok = stok - 1, 1 jadi 0</>,
@@ -729,9 +758,15 @@ const Slide3: React.FC<{ local: number }> = ({ local }) => {
         </span>,
       ]}
       caption={[
-        { t: "Update yang kedua menimpa yang pertama. Ini " },
-        { t: "race condition", hl: true },
-        { t: "." },
+        { t: "Update ", start: 28.946, end: 29.346 },
+        { t: "yang ", start: 29.366, end: 29.466 },
+        { t: "kedua ", start: 29.486, end: 29.767 },
+        { t: "menimpa ", start: 29.807, end: 30.167 },
+        { t: "yang ", start: 30.187, end: 30.267 },
+        { t: "pertama. ", start: 30.307, end: 30.727 },
+        { t: "Ini ", start: 31.108, end: 31.268 },
+        { t: "race ", start: 31.668, end: 31.829 },
+        { t: "condition.", start: 31.969, end: 32.409 },
       ]}
     >
       <svg
@@ -837,15 +872,26 @@ const Slide4: React.FC<{ local: number }> = ({ local }) => {
       title="Cek Dulu Itu Tidak Aman"
       activeStep={3}
       local={local}
+      time={(1080 + local) / FPS}
       dividerAfter={1}
       code={[
         <>SELECT stok FROM produk WHERE id = 1;</>,
         <>if (stok &gt;= 1) UPDATE stok = stok - 1;</>,
       ]}
       caption={[
-        { t: "Cek dan kurangi itu " },
-        { t: "dua langkah terpisah", hl: true },
-        { t: ". Di celahnya, request lain bisa masuk." },
+        { t: "Cek ", start: 39.096, end: 39.236 },
+        { t: "dan ", start: 39.296, end: 39.416 },
+        { t: "kurangi ", start: 39.476, end: 39.756 },
+        { t: "itu ", start: 39.816, end: 40.076 },
+        { t: "dua ", start: 40.297, end: 40.437 },
+        { t: "langkah ", start: 40.517, end: 40.797 },
+        { t: "terpisah. ", start: 40.857, end: 41.318 },
+        { t: "Di ", start: 41.938, end: 42.279 },
+        { t: "celahnya, ", start: 42.279, end: 43.38 },
+        { t: "request ", start: 43.64, end: 43.98 },
+        { t: "lain ", start: 44.02, end: 44.301 },
+        { t: "bisa ", start: 44.501, end: 44.721 },
+        { t: "masuk.", start: 45.241, end: 45.562 },
       ]}
     >
       {steps.slice(0, 2).map((st, i) => (
@@ -992,6 +1038,7 @@ const Slide5: React.FC<{ local: number }> = ({ local }) => {
       title="Satu Langkah Atomik"
       activeStep={4}
       local={local}
+      time={(1440 + local) / FPS}
       code={[
         <>UPDATE produk SET stok = stok - 1</>,
         <>
@@ -1000,8 +1047,15 @@ const Slide5: React.FC<{ local: number }> = ({ local }) => {
         </>,
       ]}
       caption={[
-        { t: "Kalau dua request sampai persis bersamaan, " },
-        { t: "siapa yang menang?", hl: true },
+        { t: "Kalau ", start: 57.509, end: 57.629 },
+        { t: "dua ", start: 57.669, end: 57.869 },
+        { t: "request ", start: 57.909, end: 58.009 },
+        { t: "sampai ", start: 58.049, end: 58.229 },
+        { t: "persis ", start: 58.269, end: 58.49 },
+        { t: "bersamaan, ", start: 58.53, end: 58.89 },
+        { t: "siapa ", start: 59.11, end: 59.29 },
+        { t: "yang ", start: 59.31, end: 59.39 },
+        { t: "menang?", start: 59.41, end: 59.611 },
       ]}
     >
       <svg
