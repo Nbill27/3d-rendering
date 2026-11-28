@@ -27,6 +27,7 @@ import { Video21 } from "./videos/v21/Video21";
 import { Video22 } from "./videos/v22/Video22";
 import { Video22Fail2Install } from "./videos/v22-fail2install/Video22Fail2Install";
 import { Video23 } from "./videos/v23/Video23";
+import { Video23Vcenter } from "./videos/v23-vcenter/Video23Vcenter";
 
 export const MyComposition = () => {
   return (
@@ -255,6 +256,14 @@ export const MyComposition = () => {
         width={1080}
         height={1920}
       />
+      <Composition
+        id="DiBalikLayarVcenter"
+        component={Video23Vcenter}
+        durationInFrames={1800}
+        fps={30}
+        width={1080}
+        height={1920}
+    />
            </>
   );
 };
