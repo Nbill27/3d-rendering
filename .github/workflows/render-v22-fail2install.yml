@@ -1,0 +1,150 @@
+name: Render Video22Fail2Install
+
+# Renders all 1800 frames of the DiBalikLayarFail2Install composition
+# (Di Balik Layar EP 01, Drupal Fail2Install CVE-2026-132165) in 15
+# parallel jobs (120 frames each). Each job uploads its 120-frame mp4
+# as an artifact; the artifacts are concatenated and muxed with
+# audio/mix.wav locally afterwards. No frames are rendered locally
+# for this video.
+#
+# Trigger manually from the Actions tab (workflow_dispatch), or
+# automatically when this workflow file is merged to main (push trigger
+# below, so the squash-merge that lands Video22Fail2Install starts
+# the run).
+# The publish job uploads the 15 chunks to release "video22-render"
+# so they can be fetched without the Actions UI.
+# LESSON FROM EP 01 (race condition, render-v21.yml): the publish job
+# MUST have an actions/checkout step first, otherwise `gh release`
+# fails with "fatal: not a git repository".
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/render-v22-fail2install.yml
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - job: 0
+            start: 0
+            end: 119
+          - job: 1
+            start: 120
+            end: 239
+          - job: 2
+            start: 240
+            end: 359
+          - job: 3
+            start: 360
+            end: 479
+          - job: 4
+            start: 480
+            end: 599
+          - job: 5
+            start: 600
+            end: 719
+          - job: 6
+            start: 720
+            end: 839
+          - job: 7
+            start: 840
+            end: 959
+          - job: 8
+            start: 960
+            end: 1079
+          - job: 9
+            start: 1080
+            end: 1199
+          - job: 10
+            start: 1200
+            end: 1319
+          - job: 11
+            start: 1320
+            end: 1439
+          - job: 12
+            start: 1440
+            end: 1559
+          - job: 13
+            start: 1560
+            end: 1679
+          - job: 14
+            start: 1680
+            end: 1799
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install ffmpeg (needed for the ffprobe verification step)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Ensure Chrome Headless Shell
+        run: npx remotion browser ensure
+
+      - name: Render frames ${{ matrix.start }}-${{ matrix.end }}
+        run: >
+          npx remotion render DiBalikLayarFail2Install
+          video22-chunk-${{ matrix.job }}.mp4
+          --frames=${{ matrix.start }}-${{ matrix.end }}
+          --concurrency=1
+          --timeout=300000
+
+      - name: Verify chunk (must be exactly 120 frames, 1080x1920)
+        run: |
+          FRAMES=$(ffprobe -v error -count_frames -select_streams v:0 \
+            -show_entries stream=nb_read_frames -of csv=p=0 \
+            video22-chunk-${{ matrix.job }}.mp4)
+          echo "frames=$FRAMES"
+          test "$FRAMES" = "120"
+          ffprobe -v error -select_streams v:0 \
+            -show_entries stream=width,height -of csv=p=0 \
+            video22-chunk-${{ matrix.job }}.mp4
+
+      - name: Upload chunk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: video22-chunk-${{ matrix.job }}
+          path: video22-chunk-${{ matrix.job }}.mp4
+          retention-days: 7
+
+  publish:
+    needs: render
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all chunk artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: video22-chunk-*
+          path: chunks
+          merge-multiple: true
+
+      - name: Publish chunks to release video22-render
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l chunks/
+          test $(ls chunks/video22-chunk-*.mp4 | wc -l) = "15"
+          gh release create video22-render --title "Video22Fail2Install render chunks" --notes "Di Balik Layar EP 01, Drupal Fail2Install CVE-2026-132165. 15 chunks of 120 frames." || true
+          gh release upload video22-render chunks/video22-chunk-*.mp4 --clobber
+
+# Note: pushing a change to this file starts a run on the pushed branch (push trigger below).
