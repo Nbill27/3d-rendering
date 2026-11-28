@@ -23,6 +23,7 @@ import { Video17 } from "./videos/v17/Video17";
 import { Video18 } from "./videos/v18/Video18";
 import { Video19 } from "./videos/v19/Video19";
 import { Video20 } from "./videos/v20/Video20";
+import { Video21 } from "./videos/v21/Video21";
 
 export const MyComposition = () => {
   return (
@@ -214,6 +215,14 @@ export const MyComposition = () => {
       <Composition
         id="Video20"
         component={Video20}
+        durationInFrames={1800}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="DiBalikLayarRaceCondition"
+        component={Video21}
         durationInFrames={1800}
         fps={30}
         width={1080}
