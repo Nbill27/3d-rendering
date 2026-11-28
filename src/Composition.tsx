@@ -9,19 +9,16 @@ import { Video01 } from "./videos/v01/Video01";
 import { Video02 } from "./videos/v02/Video02";
 import { Video03 } from "./videos/v03/Video03";
 import { Video04 } from "./videos/v04/Video04";
-import { LewisReveal } from "./videos/v04/LewisReveal";
 import { Video05 } from "./videos/v05/Video05";
 import { Video06 } from "./videos/v06/Video06";
 import { Video07 } from "./videos/v07/Video07";
 import { Video08 } from "./videos/v08/Video08";
 import { Video09 } from "./videos/v09/Video09";
-import { Video12 } from "./videos/v12/Video12";
-import { StorytimeTest } from "./videos/test-storytime/StorytimeTest";
-import { TobaTest } from "./videos/test-toba/TobaTest";
-import { TobaTestV2 } from "./videos/test-toba-v2/TobaTestV2";
-import { Video13 } from "./videos/v13/Video13";
+import { TobaTest } from "./videos/v10/TobaTest";
+import { TobaTestV2 } from "./videos/v11/TobaTestV2";
 import { Video14 } from "./videos/v14/Video14";
 import { Video16 } from "./videos/v16/Video16";
+import { Video12 } from "./videos/v12/Video12";
 import { Video17 } from "./videos/v17/Video17";
 import { Video18 } from "./videos/v18/Video18";
 import { Video19 } from "./videos/v19/Video19";
@@ -29,7 +26,6 @@ import { Video20 } from "./videos/v20/Video20";
 import { Video21 } from "./videos/v21/Video21";
 import { Video22 } from "./videos/v22/Video22";
 import { Video22Fail2Install } from "./videos/v22-fail2install/Video22Fail2Install";
-import { NewspaperTest } from "./videos/v15/NewspaperTest";
 
 export const MyComposition = () => {
   return (
@@ -45,7 +41,7 @@ export const MyComposition = () => {
       <Composition
         id="VideoKedua"
         component={VideoKedua}
-        durationInFrames={1800}
+        durationInFrames={1680}
         fps={30}
         width={1920}
         height={1080}
@@ -53,34 +49,34 @@ export const MyComposition = () => {
       <Composition
         id="VideoKetiga"
         component={VideoKetiga}
-        durationInFrames={1800}
+        durationInFrames={1680}
         fps={30}
-        width={1080}
-        height={1920}
+        width={1920}
+        height={1080}
       />
       <Composition
         id="VideoFinal"
         component={VideoFinal}
-        durationInFrames={1800}
+        durationInFrames={1680}
         fps={30}
-        width={1080}
-        height={1920}
+        width={1920}
+        height={1080}
       />
       <Composition
         id="VideoChibi"
         component={VideoChibi}
-        durationInFrames={1800}
+        durationInFrames={1680}
         fps={30}
-        width={1080}
-        height={1920}
+        width={1920}
+        height={1080}
       />
       <Composition
         id="MotionSample"
         component={MotionSample}
-        durationInFrames={180}
+        durationInFrames={1680}
         fps={30}
-        width={1080}
-        height={1920}
+        width={1920}
+        height={1080}
       />
       <Composition
         id="Video02"
@@ -110,14 +106,6 @@ export const MyComposition = () => {
         id="Video04"
         component={Video04}
         durationInFrames={1800}
-        fps={30}
-        width={1080}
-        height={1920}
-      />
-      <Composition
-        id="LewisReveal"
-        component={LewisReveal}
-        durationInFrames={330}
         fps={30}
         width={1080}
         height={1920}
@@ -163,23 +151,7 @@ export const MyComposition = () => {
         height={1920}
       />
       <Composition
-        id="Video12"
-        component={Video12}
-        durationInFrames={1680}
-        fps={30}
-        width={1080}
-        height={1920}
-      />
-      <Composition
-        id="StorytimeTest"
-        component={StorytimeTest}
-        durationInFrames={1350}
-        fps={30}
-        width={1080}
-        height={1920}
-      />
-      <Composition
-        id="TobaTest"
+        id="Video10"
         component={TobaTest}
         durationInFrames={1622}
         fps={30}
@@ -187,17 +159,9 @@ export const MyComposition = () => {
         height={1920}
       />
       <Composition
-        id="TobaTestV2"
+        id="Video11"
         component={TobaTestV2}
         durationInFrames={1396}
-        fps={30}
-        width={1080}
-        height={1920}
-      />
-      <Composition
-        id="Video13"
-        component={Video13}
-        durationInFrames={1789}
         fps={30}
         width={1080}
         height={1920}
@@ -214,6 +178,14 @@ export const MyComposition = () => {
         id="Video16"
         component={Video16}
         durationInFrames={1800}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="Video12"
+        component={Video12}
+        durationInFrames={1680}
         fps={30}
         width={1080}
         height={1920}
@@ -269,14 +241,6 @@ export const MyComposition = () => {
       <Composition
         id="Video22"
         component={Video22}
-        durationInFrames={1800}
-        fps={30}
-        width={1080}
-        height={1920}
-      />
-      <Composition
-        id="NewspaperTest"
-        component={NewspaperTest}
         durationInFrames={1800}
         fps={30}
         width={1080}
