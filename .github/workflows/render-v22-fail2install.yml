@@ -144,3 +144,5 @@ jobs:
           test $(ls chunks/video22-chunk-*.mp4 | wc -l) = "15"
           gh release create video22-render --title "Video22Fail2Install render chunks" --notes "Di Balik Layar EP 01, Drupal Fail2Install CVE-2026-132165. 15 chunks of 120 frames." || true
           gh release upload video22-render chunks/video22-chunk-*.mp4 --clobber
+
+# Note: pushing a change to this file starts a run on the pushed branch (push trigger below).
