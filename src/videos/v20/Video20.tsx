@@ -18,7 +18,7 @@
 // panX = 0, panY = 0.
 // GAYA @tauugaksih (aturan bill 28 Nov, berlaku semua video selanjutnya):
 // palet komplementer KONSISTEN jingga/terakota gurun lawan biru laut Pasifik;
-// SATU kata kunci BESAR per beat (GUANO, PAJAK, PERANG, LAUT, HILANG) di
+// SATU kata kunci BESAR per beat (GUANO, TAX, WAR, SEA, LOST) di
 // tengah frame di samping karaoke; kedalaman tiga lapis dengan foreground
 // framing (tumpukan guano, tiang dermaga, semak); motif yang diulang:
 // tumpukan guano (S1, S2, S9) dan kapal Huascar (S7 3D, S9 foto asli);
@@ -847,7 +847,7 @@ const Scene8: React.FC<{ local: number }> = ({ local }) => {
 const Scene9: React.FC<{ local: number }> = () => (
   <AbsoluteFill>
     {/* Penutup: peta (f1450-1610) lalu foto Huascar 1903 (f1700-1800).
-        Kata kunci HILANG muncul di antara keduanya (local 170-255),
+        Kata kunci LOST muncul di antara keduanya (local 170-255),
         di atas pantai subuh biru gelap — suasana dingin penanda twist. */}
   </AbsoluteFill>
 );
@@ -875,14 +875,14 @@ const BEAT_LABEL_TEXT: Record<number, string> = {
 };
 
 /** Satu kata kunci BESAR per beat (aturan @tauugaksih): scene -> kata,
- *  local awal tampil, durasi (frame). S9 HILANG tampil setelah peta
+ *  local awal tampil, durasi (frame). S9 LOST tampil setelah peta
  *  tutup (local 170) dan sebelum foto muncul (local 257). */
 const BEAT_WORDS: Record<number, { word: string; at: number; dur: number }> = {
   1: { word: "GUANO", at: 0, dur: 120 },
-  3: { word: "PAJAK", at: 0, dur: 120 },
-  5: { word: "PERANG", at: 0, dur: 120 },
-  6: { word: "LAUT", at: 0, dur: 120 },
-  8: { word: "HILANG", at: 170, dur: 85 },
+  3: { word: "TAX", at: 0, dur: 120 },
+  5: { word: "WAR", at: 0, dur: 120 },
+  6: { word: "SEA", at: 0, dur: 120 },
+  8: { word: "LOST", at: 170, dur: 85 },
 };
 
 export const Video20: React.FC = () => {
