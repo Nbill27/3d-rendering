@@ -251,43 +251,67 @@ const CodeStrip: React.FC<{
 
 type KaraokeWord = { t: string; start: number; end: number };
 
-// Subtitle karaoke (revisi 28 Nov 2026, perintah bill): kalimat penjelas
-// dipecah per kata, hanya kata yang sedang diucapkan VO yang oranye,
-// kata lain putih hangat. start/end dalam detik absolut video (mix.wav).
-// Slide 3, 4, 5: waktu kata langsung dari WhisperX mix.json. Slide 1, 2:
-// kalimat caption adalah ringkasan yang urutan katanya beda dari urutan VO,
-// jadi waktu kata adalah distribusi proporsional per panjang kata di dalam
-// rentang WhisperX yang terukur (lihat SKILL_CHECKLIST.md).
+// Subtitle karaoke per kalimat (revisi 28 Nov 2026, perintah bill): hanya
+// kalimat yang sedang diucapkan VO yang tampil di layar, 1-2 baris saja.
+// Kata-kata tetap naskah VO PERSIS, waktu tiap kata dari WhisperX per baris
+// dengan offset trim-corrected (audio/verbatim_timings.json). Kalimat
+// ditentukan dari kata yang diakhiri titik atau tanda tanya. Di jeda antar
+// kalimat tidak ada subtitle yang tampil, kalimat berikutnya muncul saat kata
+// pertamanya mulai diucapkan. Hanya kata yang sedang diucapkan yang oranye,
+// kata lain putih hangat.
 const Caption: React.FC<{ words: KaraokeWord[]; local: number; time: number }> = ({
   words,
   local,
   time,
-}) => (
-  <div
-    style={{
-      position: "absolute",
-      left: 70,
-      top: 1470,
-      width: 940,
-      fontFamily: SANS,
-      fontSize: 40,
-      lineHeight: 1.28,
-      fontWeight: 700,
-      letterSpacing: -0.5,
-      color: INK,
-      ...enterStyle(local, 40, 12),
-    }}
-  >
-    {words.map((w, i) => {
-      const active = time >= w.start && time < w.end;
-      return (
-        <span key={i} style={active ? { color: ACCENT } : undefined}>
-          {w.t}
-        </span>
-      );
-    })}
-  </div>
-);
+}) => {
+  // Kelompokkan kata menjadi kalimat, pisah setelah kata yang diakhiri . atau ?
+  const sentences: KaraokeWord[][] = [];
+  let current: KaraokeWord[] = [];
+  for (const w of words) {
+    current.push(w);
+    if (/[.?]$/.test(w.t.trim())) {
+      sentences.push(current);
+      current = [];
+    }
+  }
+  if (current.length > 0) {
+    sentences.push(current);
+  }
+  // Kalimat aktif: waktu berada di antara kata pertama dan kata terakhirnya.
+  // Di jeda antar kalimat tidak ada yang tampil.
+  const active = sentences.find(
+    (s) => time >= s[0].start && time < s[s.length - 1].end
+  );
+  if (!active) {
+    return null;
+  }
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 70,
+        top: 1470,
+        width: 940,
+        fontFamily: SANS,
+        fontSize: 40,
+        lineHeight: 1.3,
+        fontWeight: 700,
+        letterSpacing: -0.5,
+        color: INK,
+        ...enterStyle(local, 40, 12),
+      }}
+    >
+      {active.map((w, i) => {
+        const isActive = time >= w.start && time < w.end;
+        return (
+          <span key={i} style={isActive ? { color: ACCENT } : undefined}>
+            {w.t}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
 
 const Chrome: React.FC<{
   title: string;
@@ -437,15 +461,30 @@ const Slide1: React.FC<{ local: number }> = ({ local }) => {
       local={local}
       time={local / FPS}
       caption={[
-        { t: "Dua ", start: 0.111, end: 0.382 },
-        { t: "orang ", start: 0.382, end: 0.833 },
-        { t: "beli ", start: 0.833, end: 1.194 },
-        { t: "barang ", start: 1.194, end: 1.736 },
-        { t: "terakhir ", start: 1.736, end: 2.458 },
-        { t: "di ", start: 2.458, end: 2.639 },
-        { t: "detik ", start: 2.639, end: 3.09 },
-        { t: "yang ", start: 3.09, end: 3.451 },
-        { t: "sama.", start: 3.451, end: 3.812 },
+        { t: "Satu ", start: 0.123, end: 0.324 },
+        { t: "barang ", start: 0.364, end: 0.565 },
+        { t: "tersisa ", start: 0.625, end: 0.966 },
+        { t: "di ", start: 1.006, end: 1.100 },
+        { t: "toko ", start: 1.100, end: 1.288 },
+        { t: "online. ", start: 1.328, end: 1.649 },
+        { t: "Dua ", start: 1.950, end: 2.071 },
+        { t: "orang ", start: 2.131, end: 2.312 },
+        { t: "menekan ", start: 2.332, end: 2.573 },
+        { t: "tombol ", start: 2.633, end: 2.834 },
+        { t: "beli ", start: 2.895, end: 3.075 },
+        { t: "di ", start: 3.115, end: 3.176 },
+        { t: "detik ", start: 3.196, end: 3.397 },
+        { t: "yang ", start: 3.417, end: 3.517 },
+        { t: "sama. ", start: 3.598, end: 3.839 },
+        { t: "Satu ", start: 4.180, end: 4.361 },
+        { t: "dapat ", start: 4.401, end: 4.562 },
+        { t: "barangnya, ", start: 4.622, end: 4.963 },
+        { t: "satu ", start: 5.225, end: 5.385 },
+        { t: "lagi ", start: 5.425, end: 5.586 },
+        { t: "tetap ", start: 5.626, end: 5.827 },
+        { t: "ditagih. ", start: 5.847, end: 6.831 },
+        { t: "Kok ", start: 6.912, end: 6.992 },
+        { t: "bisa?", start: 7.052, end: 7.293 },
       ]}
     >
       <div
@@ -571,15 +610,34 @@ const Slide2: React.FC<{ local: number }> = ({ local }) => {
         </span>,
       ]}
       caption={[
-        { t: "Keduanya ", start: 11.115, end: 12.7 },
-        { t: "baca ", start: 12.7, end: 13.493 },
-        { t: "stok ", start: 13.493, end: 14.285 },
-        { t: "1, ", start: 14.285, end: 14.484 },
-        { t: "sebelum ", start: 14.484, end: 15.871 },
-        { t: "ada ", start: 15.871, end: 16.465 },
-        { t: "yang ", start: 16.465, end: 17.258 },
-        { t: "sempat ", start: 17.258, end: 18.447 },
-        { t: "menulis.", start: 18.447, end: 19.834 },
+        { t: "Begini ", start: 9.072, end: 9.332 },
+        { t: "jalannya. ", start: 9.412, end: 9.773 },
+        { t: "Request ", start: 10.435, end: 10.735 },
+        { t: "A ", start: 10.795, end: 10.869 },
+        { t: "baca ", start: 10.869, end: 11.236 },
+        { t: "stok, ", start: 11.297, end: 11.557 },
+        { t: "hasilnya ", start: 12.018, end: 12.359 },
+        { t: "satu. ", start: 12.439, end: 12.720 },
+        { t: "Request ", start: 13.421, end: 13.702 },
+        { t: "B ", start: 13.802, end: 13.872 },
+        { t: "baca ", start: 13.872, end: 14.223 },
+        { t: "stok, ", start: 14.263, end: 14.523 },
+        { t: "hasilnya ", start: 15.065, end: 15.385 },
+        { t: "juga ", start: 15.445, end: 15.586 },
+        { t: "satu. ", start: 15.666, end: 15.906 },
+        { t: "Keduanya ", start: 16.608, end: 16.908 },
+        { t: "membaca ", start: 16.928, end: 17.249 },
+        { t: "di ", start: 17.289, end: 17.349 },
+        { t: "saat ", start: 17.410, end: 17.550 },
+        { t: "yang ", start: 17.590, end: 17.670 },
+        { t: "sama, ", start: 17.730, end: 17.991 },
+        { t: "sebelum ", start: 18.452, end: 18.672 },
+        { t: "ada ", start: 18.712, end: 18.853 },
+        { t: "yang ", start: 18.873, end: 18.953 },
+        { t: "sempat ", start: 19.013, end: 19.213 },
+        { t: "menulis ", start: 19.233, end: 19.514 },
+        { t: "ke ", start: 19.554, end: 19.594 },
+        { t: "database.", start: 19.634, end: 20.456 },
       ]}
     >
       <svg
@@ -758,15 +816,41 @@ const Slide3: React.FC<{ local: number }> = ({ local }) => {
         </span>,
       ]}
       caption={[
-        { t: "Update ", start: 28.946, end: 29.346 },
-        { t: "yang ", start: 29.366, end: 29.466 },
-        { t: "kedua ", start: 29.486, end: 29.767 },
-        { t: "menimpa ", start: 29.807, end: 30.167 },
-        { t: "yang ", start: 30.187, end: 30.267 },
-        { t: "pertama. ", start: 30.307, end: 30.727 },
-        { t: "Ini ", start: 31.108, end: 31.268 },
-        { t: "race ", start: 31.668, end: 31.829 },
-        { t: "condition.", start: 31.969, end: 32.409 },
+        { t: "Lalu ", start: 22.082, end: 22.443 },
+        { t: "keduanya ", start: 22.563, end: 22.924 },
+        { t: "lolos ", start: 22.984, end: 23.265 },
+        { t: "cek, ", start: 23.385, end: 23.545 },
+        { t: "keduanya ", start: 23.766, end: 24.147 },
+        { t: "kurangi ", start: 24.227, end: 24.447 },
+        { t: "stok. ", start: 24.468, end: 24.848 },
+        { t: "Satu ", start: 25.370, end: 25.590 },
+        { t: "kurang ", start: 25.650, end: 25.831 },
+        { t: "satu ", start: 25.911, end: 26.152 },
+        { t: "jadi ", start: 26.232, end: 26.488 },
+        { t: "nol, ", start: 26.488, end: 26.693 },
+        { t: "nol ", start: 26.974, end: 27.114 },
+        { t: "kurang ", start: 27.174, end: 27.374 },
+        { t: "satu ", start: 27.455, end: 27.655 },
+        { t: "jadi ", start: 27.755, end: 27.933 },
+        { t: "minus ", start: 27.933, end: 28.156 },
+        { t: "satu. ", start: 28.237, end: 28.557 },
+        { t: "Update ", start: 28.938, end: 29.339 },
+        { t: "yang ", start: 29.379, end: 29.459 },
+        { t: "kedua ", start: 29.500, end: 29.780 },
+        { t: "menimpa ", start: 29.820, end: 30.161 },
+        { t: "yang ", start: 30.201, end: 30.281 },
+        { t: "pertama. ", start: 30.321, end: 30.742 },
+        { t: "Ini ", start: 31.123, end: 31.284 },
+        { t: "namanya ", start: 31.304, end: 31.645 },
+        { t: "race ", start: 31.685, end: 31.845 },
+        { t: "condition, ", start: 31.985, end: 32.427 },
+        { t: "dan ", start: 32.687, end: 32.787 },
+        { t: "update ", start: 32.848, end: 33.108 },
+        { t: "yang ", start: 33.128, end: 33.228 },
+        { t: "hilang ", start: 33.248, end: 33.449 },
+        { t: "itu ", start: 33.509, end: 33.730 },
+        { t: "lost ", start: 33.970, end: 34.171 },
+        { t: "update.", start: 34.251, end: 35.153 },
       ]}
     >
       <svg
@@ -879,19 +963,29 @@ const Slide4: React.FC<{ local: number }> = ({ local }) => {
         <>if (stok &gt;= 1) UPDATE stok = stok - 1;</>,
       ]}
       caption={[
-        { t: "Cek ", start: 39.096, end: 39.236 },
-        { t: "dan ", start: 39.296, end: 39.416 },
-        { t: "kurangi ", start: 39.476, end: 39.756 },
-        { t: "itu ", start: 39.816, end: 40.076 },
-        { t: "dua ", start: 40.297, end: 40.437 },
-        { t: "langkah ", start: 40.517, end: 40.797 },
-        { t: "terpisah. ", start: 40.857, end: 41.318 },
-        { t: "Di ", start: 41.938, end: 42.279 },
-        { t: "celahnya, ", start: 42.279, end: 43.38 },
-        { t: "request ", start: 43.64, end: 43.98 },
-        { t: "lain ", start: 44.02, end: 44.301 },
-        { t: "bisa ", start: 44.501, end: 44.721 },
-        { t: "masuk.", start: 45.241, end: 45.562 },
+        { t: "Masalahnya ", start: 36.072, end: 36.712 },
+        { t: "bukan ", start: 36.953, end: 37.173 },
+        { t: "di ", start: 37.193, end: 37.284 },
+        { t: "ceknya. ", start: 37.284, end: 37.693 },
+        { t: "Masalahnya, ", start: 38.234, end: 38.815 },
+        { t: "cek ", start: 39.095, end: 39.235 },
+        { t: "dan ", start: 39.295, end: 39.395 },
+        { t: "kurangi ", start: 39.455, end: 39.756 },
+        { t: "itu ", start: 39.796, end: 40.276 },
+        { t: "dua ", start: 40.296, end: 40.437 },
+        { t: "langkah ", start: 40.497, end: 40.797 },
+        { t: "terpisah. ", start: 40.857, end: 41.298 },
+        { t: "Di ", start: 41.938, end: 42.052 },
+        { t: "celah ", start: 42.052, end: 42.279 },
+        { t: "antara ", start: 42.339, end: 42.579 },
+        { t: "dua ", start: 42.659, end: 42.759 },
+        { t: "langkah ", start: 42.799, end: 43.040 },
+        { t: "itu, ", start: 43.100, end: 43.380 },
+        { t: "request ", start: 43.620, end: 43.961 },
+        { t: "lain ", start: 44.021, end: 44.281 },
+        { t: "bisa ", start: 44.481, end: 44.702 },
+        { t: "menyelinap ", start: 44.742, end: 45.162 },
+        { t: "masuk.", start: 45.222, end: 45.563 },
       ]}
     >
       {steps.slice(0, 2).map((st, i) => (
@@ -1047,15 +1141,46 @@ const Slide5: React.FC<{ local: number }> = ({ local }) => {
         </>,
       ]}
       caption={[
-        { t: "Kalau ", start: 57.509, end: 57.629 },
-        { t: "dua ", start: 57.669, end: 57.869 },
-        { t: "request ", start: 57.909, end: 58.009 },
-        { t: "sampai ", start: 58.049, end: 58.229 },
-        { t: "persis ", start: 58.269, end: 58.49 },
-        { t: "bersamaan, ", start: 58.53, end: 58.89 },
-        { t: "siapa ", start: 59.11, end: 59.29 },
-        { t: "yang ", start: 59.31, end: 59.39 },
-        { t: "menang?", start: 59.41, end: 59.611 },
+        { t: "Solusinya, ", start: 47.781, end: 48.221 },
+        { t: "gabung ", start: 48.441, end: 48.722 },
+        { t: "jadi ", start: 48.782, end: 48.922 },
+        { t: "satu ", start: 48.982, end: 49.162 },
+        { t: "langkah ", start: 49.222, end: 49.482 },
+        { t: "atomik. ", start: 49.542, end: 49.842 },
+        { t: "Kurangi ", start: 50.142, end: 50.302 },
+        { t: "stok ", start: 50.342, end: 50.582 },
+        { t: "dan ", start: 50.642, end: 50.723 },
+        { t: "cek ", start: 50.783, end: 50.903 },
+        { t: "stoknya ", start: 50.923, end: 51.183 },
+        { t: "dalam ", start: 51.223, end: 51.383 },
+        { t: "satu ", start: 51.443, end: 51.623 },
+        { t: "query ", start: 51.703, end: 51.883 },
+        { t: "yang ", start: 51.923, end: 52.023 },
+        { t: "sama. ", start: 52.063, end: 52.303 },
+        { t: "Kalau ", start: 52.683, end: 52.824 },
+        { t: "query ", start: 52.864, end: 53.064 },
+        { t: "mengubah ", start: 53.084, end: 53.304 },
+        { t: "satu ", start: 53.344, end: 53.484 },
+        { t: "baris, ", start: 53.524, end: 53.804 },
+        { t: "berarti ", start: 53.964, end: 54.224 },
+        { t: "berhasil. ", start: 54.244, end: 54.604 },
+        { t: "Kalau ", start: 54.985, end: 55.125 },
+        { t: "nol ", start: 55.185, end: 55.285 },
+        { t: "baris, ", start: 55.345, end: 55.605 },
+        { t: "berarti ", start: 55.745, end: 56.005 },
+        { t: "stok ", start: 56.025, end: 56.165 },
+        { t: "sudah ", start: 56.205, end: 56.305 },
+        { t: "habis. ", start: 56.325, end: 56.605 },
+        { t: "Jadi, ", start: 57.146, end: 57.366 },
+        { t: "kalau ", start: 57.506, end: 57.626 },
+        { t: "dua ", start: 57.666, end: 57.766 },
+        { t: "request ", start: 57.786, end: 58.006 },
+        { t: "sampai ", start: 58.046, end: 58.226 },
+        { t: "persis ", start: 58.266, end: 58.486 },
+        { t: "bersamaan, ", start: 58.526, end: 58.886 },
+        { t: "siapa ", start: 59.107, end: 59.287 },
+        { t: "yang ", start: 59.307, end: 59.387 },
+        { t: "menang?", start: 59.407, end: 59.607 },
       ]}
     >
       <svg
