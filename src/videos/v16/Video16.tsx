@@ -5,9 +5,7 @@
 // sedih). KARAKTER: Wojtek (beruang, komponen Bear di bawah — anak di
 // beat 1, dewasa berdiri di beat 2, tua di beat 3), tentara Polandia
 // (kind "soldier", seragam khaki + helm, konsisten), 2 veteran tua
-// (kind "elder", kunjungan S8), host time-traveler (kind "host":
-// karakter bill — rambut gelap berantakan, hoodie gelap </>, headphone
-// di leher, ransel, laptop logo GitHub; HANYA menonton di tepi adegan).
+// (kind "elder", kunjungan S8).
 // BATAS KEJUJURAN: Monte Cassino shell-carrying dipakai versi IPN +
 // lambang unit (diperdebatkan satu memoar veteran, RESEARCH.md); tidak
 // ada dialog/quote karangan. TIDAK ADA karakter duduk di video ini
@@ -36,7 +34,6 @@ const HELMET = "#6a6242";
 const TROUSER = "#4a3826";
 const TROUSER_DARK = "#33261a";
 const BOOT = "#3a2a1a";
-const HOODIE = "#2b2b3a"; // hoodie gelap host (karakter bill)
 const SWEAT = "#9fd4ff";
 const BEAR_BROWN = "#8a5a30";
 const BEAR_LIGHT = "#b07a45";
@@ -53,7 +50,7 @@ const BEAR_DARK = "#6e4522";
 /* untuk pose "walk". Lengan berlawanan dengan kaki (6 px).            */
 /* ------------------------------------------------------------------ */
 
-type CharKind = "soldier" | "elder" | "host";
+type CharKind = "soldier" | "elder";
 type CharPose = "stand" | "point" | "walk" | "worried" | "salute" | "wave";
 type Expr = "amazed" | "stern" | "worried" | "shock" | "star" | "smile" | "content" | "sad";
 
@@ -253,7 +250,7 @@ const BeanHead: React.FC<{
   const armRHand: [number, number] =
     pose === "point" ? [311, 166] : pose === "salute" ? [292, 108] : pose === "wave" ? [306, 140] : pose === "worried" ? [275, 322] : [253, 336];
 
-  const bodyFill = kind === "soldier" ? KHAKI : kind === "elder" ? "#3f3f4a" : HOODIE;
+  const bodyFill = kind === "soldier" ? KHAKI : "#3f3f4a";
 
   return (
     <div
@@ -289,17 +286,6 @@ const BeanHead: React.FC<{
           <rect x={184} y={484} width={40} height={18} rx={7} fill={BOOT} stroke={INK} strokeWidth={3.5} />
         </g>
 
-        {/* ransel host: di belakang badan, sisi kiri layar */}
-        {kind === "host" && (
-          <path
-            d="M104,220 C88,220 82,244 84,280 C86,316 92,352 104,360 L118,360 L118,220 Z"
-            fill="#5a5a6a"
-            stroke={INK}
-            strokeWidth={5}
-            strokeLinejoin="round"
-          />
-        )}
-
         {/* badan ramping: kapsul 130x190, outline plum */}
         <path
           d="M180,198 C220,198 245,228 245,286 C245,340 220,388 180,388 C140,388 115,340 115,286 C115,228 140,198 180,198 Z"
@@ -327,36 +313,6 @@ const BeanHead: React.FC<{
             <line x1={180} y1={224} x2={180} y2={360} stroke={INK} strokeWidth={3} opacity={0.4} />
           </>
         )}
-        {/* host: saku kanguru hoodie + tali serut + simbol </> putih */}
-        {kind === "host" && (
-          <>
-            <path d="M138,316 L222,316 L214,366 Q180,376 146,366 Z" fill="#23232e" stroke={INK} strokeWidth={4} strokeLinejoin="round" />
-            <line x1={168} y1={212} x2={166} y2={246} stroke="#f5ecd7" strokeWidth={4} strokeLinecap="round" />
-            <line x1={192} y1={212} x2={194} y2={246} stroke="#f5ecd7" strokeWidth={4} strokeLinecap="round" />
-            <text x={180} y={292} textAnchor="middle" fontFamily="monospace" fontWeight={700} fontSize={36} fill="#ffffff">&lt;/&gt;</text>
-          </>
-        )}
-
-        {/* headphone host: melingkar di leher, di atas bahu */}
-        {kind === "host" && (
-          <>
-            <path d="M128,196 Q180,168 232,196" fill="none" stroke="#3a3a48" strokeWidth={10} strokeLinecap="round" />
-            <ellipse cx={126} cy={212} rx={16} ry={22} fill="#8a8a9a" stroke={INK} strokeWidth={4} />
-            <ellipse cx={234} cy={212} rx={16} ry={22} fill="#8a8a9a" stroke={INK} strokeWidth={4} />
-          </>
-        )}
-
-        {/* laptop host: dipegang di depan badan, logo GitHub putih */}
-        {kind === "host" && (
-          <g transform="rotate(-4 260 330)">
-            <rect x={212} y={292} width={104} height={76} rx={8} fill="#1e1e28" stroke={INK} strokeWidth={4} />
-            <circle cx={264} cy={330} r={17} fill="#ffffff" />
-            <path d="M256,322 L260,314 L266,320 L272,314 L274,324 Q276,338 264,340 Q252,338 256,322 Z" fill="#1e1e28" />
-            <circle cx={258} cy={328} r={2} fill="#1e1e28" />
-            <circle cx={270} cy={328} r={2} fill="#1e1e28" />
-          </g>
-        )}
-
         {/* kepala bean */}
         <path
           d="M180,6 C235,6 278,48 278,100 C278,150 250,192 180,200 C110,192 82,150 82,100 C82,48 125,6 180,6 Z"
@@ -385,21 +341,6 @@ const BeanHead: React.FC<{
             <path d="M150,14 Q172,30 188,58" fill="none" stroke={SKIN} strokeWidth={5} strokeLinecap="round" />
           </>
         )}
-        {/* host: rambut gelap berantakan (karakter bill) + 3 jambul */}
-        {kind === "host" && (
-          <>
-            <g clipPath={`url(#head-${uid})`}>
-              <path
-                d="M82,112 C82,44 128,6 180,6 C232,6 278,44 278,112 C264,88 252,98 240,76 C228,96 214,74 200,88 C186,70 172,90 158,74 C144,94 130,72 116,92 C102,74 92,94 82,112 Z"
-                fill={INK}
-              />
-            </g>
-            <path d="M136,16 L148,0 L160,16 Z" fill={INK} />
-            <path d="M172,16 L184,0 L196,16 Z" fill={INK} />
-            <path d="M206,16 L218,2 L230,16 Z" fill={INK} />
-          </>
-        )}
-
         {/* wajah */}
         {brows()}
         {eyes()}
@@ -790,9 +731,7 @@ const EnlistPaper: React.FC = () => (
   </div>
 );
 
-/** Tumpukan peti 2D (S5): host jongkok di baliknya — peti digambar SETELAH
- *  host sehingga menutupi badan bawah host (dia jongkok di balik peti,
- *  di samping truk amunisi 3D). */
+/** Tumpukan peti 2D (S5): peti amunisi di samping truk amunisi 3D. */
 const CrateStack: React.FC = () => (
   <div style={{ position: "absolute", left: 780, top: 1290 }}>
     <div style={{ width: 230, height: 130, backgroundColor: "#8a6a42", border: "5px solid #241726", borderRadius: 8, boxShadow: "0 8px 20px rgba(0,0,0,0.5)" }}>
@@ -803,7 +742,7 @@ const CrateStack: React.FC = () => (
 );
 
 /** Pagar kandang kebun binatang (S7-S9): jeruji vertikal + 2 rel, di depan
- *  Wojtek (digambar setelah beruang) tapi di belakang host dan veteran
+ *  Wojtek (digambar setelah beruang) tapi di belakang veteran
  *  (mereka di luar pagar). */
 const FenceOverlay: React.FC = () => (
   <div style={{ position: "absolute", left: 0, right: 0, top: 1020, height: 460, pointerEvents: "none" }}>
@@ -841,15 +780,11 @@ const BeerMug: React.FC = () => (
 /* SCENES — 9 adegan (satu per baris VO), hard cut. Tiap Scene HANYA   */
 /* overlay karakter 2D + bayangan kontak; latarnya dunia 3D dari       */
 /* world3d.tsx. Kaki menapak: BeanHead y + 500*scale; Bear dewasa      */
-/* y + 540*scale; anak beruang y + 280*scale. Host SELALU di tepi      */
-/* adegan, hanya menonton (format time-traveler).                      */
+/* y + 540*scale; anak beruang y + 280*scale.                          */
 /* ------------------------------------------------------------------ */
 
 const Scene1: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
   <AbsoluteFill>
-    {/* host di tepi kiri, menonton dengan takjub */}
-    <ContactShadow x={0} y={1000} scale={0.7} />
-    <BeanHead x={0} y={1000} scale={0.7} kind="host" pose="stand" expr="amazed" speaking={speaking} local={local} />
     <ContactShadow x={180} y={700} scale={1.2} />
     <BeanHead x={180} y={700} scale={1.2} kind="soldier" pose="point" expr="amazed" speaking={speaking} local={local} />
     <ContactShadow x={430} y={500} scale={1.7} foot={540} />
@@ -861,8 +796,6 @@ const Scene1: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
 
 const Scene2: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
   <AbsoluteFill>
-    <ContactShadow x={10} y={1050} scale={0.7} />
-    <BeanHead x={10} y={1050} scale={0.7} kind="host" pose="stand" expr="smile" speaking={speaking} local={local} />
     <ContactShadow x={80} y={700} scale={1.35} />
     <BeanHead x={80} y={700} scale={1.35} kind="soldier" pose="point" expr="smile" speaking={speaking} local={local} />
     <ContactShadow x={330} y={950} scale={1.5} foot={280} />
@@ -879,8 +812,6 @@ const Scene3: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
     <ContactShadow x={360} y={920} scale={1.45} foot={280} />
     <Bear x={360} y={920} scale={1.45} age="cub" pose="reach" expr="smile" local={local} />
     <BeerMug />
-    <ContactShadow x={840} y={1050} scale={0.7} />
-    <BeanHead x={840} y={1050} scale={0.7} kind="host" pose="stand" expr="amazed" speaking={speaking} local={local} />
   </AbsoluteFill>
 );
 
@@ -892,8 +823,6 @@ const Scene4: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
     <EnlistPaper />
     <ContactShadow x={430} y={520} scale={1.6} foot={540} />
     <Bear x={430} y={520} scale={1.6} age="adult" pose="stand" expr="content" local={local} />
-    <ContactShadow x={830} y={1000} scale={0.7} />
-    <BeanHead x={830} y={1000} scale={0.7} kind="host" pose="stand" expr="amazed" speaking={speaking} local={local} />
   </AbsoluteFill>
 );
 
@@ -920,9 +849,6 @@ const Scene5: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
       <Bear x={340} y={yB} scale={sB} age="adult" pose="walk" expr="content" local={local} />
       <ContactShadow x={680} y={yR} scale={sR} />
       <BeanHead x={680} y={yR} scale={sR} kind="soldier" pose="walk" expr="stern" speaking={speaking} local={local} />
-      {/* host jongkok di balik tumpukan peti, di samping truk amunisi */}
-      <ContactShadow x={820} y={1150} scale={0.7} />
-      <BeanHead x={820} y={1150} scale={0.7} kind="host" pose="worried" expr="worried" speaking={speaking} local={local} />
       <CrateStack />
     </AbsoluteFill>
   );
@@ -930,8 +856,6 @@ const Scene5: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
 
 const Scene6: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
   <AbsoluteFill>
-    <ContactShadow x={10} y={1050} scale={0.7} />
-    <BeanHead x={10} y={1050} scale={0.7} kind="host" pose="stand" expr="smile" speaking={speaking} local={local} />
     <ContactShadow x={80} y={650} scale={1.45} />
     <BeanHead x={80} y={650} scale={1.45} kind="soldier" pose="salute" expr="smile" speaking={speaking} local={local} />
     <ContactShadow x={380} y={520} scale={1.7} foot={540} />
@@ -945,14 +869,12 @@ const Scene6: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
 
 const Scene7: React.FC<{ local: number; speaking: boolean }> = ({ local, speaking }) => (
   <AbsoluteFill>
-    {/* Wojtek tua di DALAM pagar (digambar sebelum pagar); host di LUAR
-        pagar (digambar setelah pagar). Kepala menunduk pelan (bow). */}
+    {/* Wojtek tua di DALAM pagar (digambar sebelum pagar).
+        Kepala menunduk pelan (bow). */}
     <ContactShadow x={360} y={560} scale={1.7} foot={540} />
     <Bear x={360} y={560} scale={1.7} age="old" pose="stand" expr="sad" local={local} bow={14} />
     <FenceOverlay />
     <RainOverlay local={local} />
-    <ContactShadow x={800} y={1000} scale={0.75} />
-    <BeanHead x={800} y={1000} scale={0.75} kind="host" pose="stand" expr="sad" speaking={speaking} local={local} />
   </AbsoluteFill>
 );
 
@@ -965,8 +887,6 @@ const Scene8: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
     <BeanHead x={60} y={700} scale={1.4} kind="elder" pose="wave" expr="smile" speaking={speaking} local={local} />
     <ContactShadow x={700} y={720} scale={1.25} />
     <BeanHead x={700} y={720} scale={1.25} kind="elder" pose="wave" expr="content" speaking={speaking} local={local} />
-    <ContactShadow x={880} y={1120} scale={0.7} />
-    <BeanHead x={880} y={1120} scale={0.7} kind="host" pose="stand" expr="smile" speaking={speaking} local={local} />
   </AbsoluteFill>
 );
 
@@ -975,8 +895,6 @@ const Scene9: React.FC<{ local: number; speaking: boolean }> = ({ local, speakin
     <ContactShadow x={380} y={560} scale={1.7} foot={540} />
     <Bear x={380} y={560} scale={1.7} age="old" pose="stand" expr="sad" local={local} bow={8} />
     <FenceOverlay />
-    <ContactShadow x={700} y={1000} scale={0.75} />
-    <BeanHead x={700} y={1000} scale={0.75} kind="host" pose="stand" expr="sad" speaking={speaking} local={local} />
   </AbsoluteFill>
 );
 
