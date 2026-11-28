@@ -139,8 +139,8 @@ jobs:
           merge-multiple: true
 
       - name: Publish chunks to release video22-render
-          env:
-            GH_TOKEN: ${{ github.token }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           ls -l chunks/
           test $(ls chunks/video22-chunk-*.mp4 | wc -l) = "15"
